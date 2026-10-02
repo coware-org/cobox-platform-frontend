@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button, Dialog, Input } from '@/components/ui';
-import type { Route } from '@/modules/fleet.types';
+import type { Route } from '@/features/routes/types';
 
 type CompleteOrderDialogProps = {
   open: boolean;
@@ -21,8 +21,8 @@ export function CompleteOrderDialog({
 }: CompleteOrderDialogProps) {
   const [routeId, setRouteId] = useState('');
   const [receiverName, setReceiverName] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=600');
-  const [signatureData, setSignatureData] = useState('Firma Digital CoBox Logística');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [signatureData, setSignatureData] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Sync with assignedRouteId if provided
@@ -44,12 +44,16 @@ export function CompleteOrderDialog({
       setError('El nombre del receptor es obligatorio');
       return;
     }
+    if (!photoUrl.trim()) {
+      setError('La evidencia fotografica de la entrega es obligatoria');
+      return;
+    }
 
     onSubmit({
       routeId: Number(routeId),
-      photoUrl,
-      receiverName,
-      signatureData,
+      photoUrl: photoUrl.trim(),
+      receiverName: receiverName.trim(),
+      signatureData: signatureData.trim(),
     });
   };
 
@@ -68,7 +72,7 @@ export function CompleteOrderDialog({
             <option value="">Seleccione una ruta</option>
             {routes.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.code} ({r.status === 'in_progress' ? 'En progreso' : r.status === 'pending' ? 'Pendiente' : 'Completada'})
+                {r.title} ({r.status === 'IN_PROGRESS' ? 'En progreso' : r.status === 'PLANNED' ? 'Pendiente' : 'Completada'})
               </option>
             ))}
           </select>
@@ -85,7 +89,7 @@ export function CompleteOrderDialog({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700">Evidencia (Foto URL)</label>
+          <label className="block text-sm font-medium text-slate-700">Evidencia (Foto URL) *</label>
           <Input
             value={photoUrl}
             onChange={(e) => setPhotoUrl(e.target.value)}
@@ -99,7 +103,7 @@ export function CompleteOrderDialog({
           <Input
             value={signatureData}
             onChange={(e) => setSignatureData(e.target.value)}
-            placeholder="Ej. Firma digital Cobox"
+            placeholder="Opcional"
             className="mt-1"
           />
         </div>
