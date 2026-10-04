@@ -1,10 +1,9 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { AuthLayout, DashboardLayout, DriverLayout } from '@/components/layouts';
 import { LoginPage, RegisterPage } from '@/features/auth';
 import { DashboardPage } from '@/features/dashboard';
 import { SmartVisionPage } from '@/features/smartvision';
-import { AlertsPage } from '@/features/alerts';
 import { EvidenceAnalysesPage } from '@/features/evidence-analyses';
 import { VehiclesPage } from '@/features/vehicles';
 import { DriversPage } from '@/features/drivers';
@@ -33,6 +32,18 @@ function RootRedirect() {
   );
 }
 
+/**
+ * La bandeja de alertas vive en SmartVision IA. `/alerts` se conserva solo
+ * como alias para no romper enlaces profundos (por ejemplo `?alertId=`),
+ * reenviando la query string completa.
+ */
+function AlertsRedirect() {
+  const [searchParams] = useSearchParams();
+  const search = searchParams.toString();
+
+  return <Navigate to={{ pathname: '/smartvision', search }} replace />;
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -44,7 +55,7 @@ export function AppRoutes() {
       <Route element={<DashboardLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/smartvision" element={<SmartVisionPage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/alerts" element={<AlertsRedirect />} />
         <Route path="/evidence-analyses" element={<EvidenceAnalysesPage />} />
         <Route path="/vehicles" element={<VehiclesPage />} />
         <Route path="/drivers" element={<DriversPage />} />

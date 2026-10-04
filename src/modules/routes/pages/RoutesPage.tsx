@@ -68,10 +68,8 @@ export function RoutesPage() {
   // Enriquecer rutas con datos de órdenes/paradas
   const enrichedRoutes = useMemo(() => {
     return routes.map((route) => {
-      // Buscar las órdenes que corresponden a esta ruta
-      // En la base de datos de rutas, route.ordersCount o la lista de IDs
-      // Pero el hook de useOrders ya enriquece las órdenes con assignedRouteId
-      const routeStops = orders.filter((order) => String(order.assignedRouteId) === String(route.id));
+      // El hook de useOrders ya resuelve la ruta asignada de cada orden
+      const routeStops = orders.filter((order) => order.assignment.routeId === route.id);
 
       const driver = drivers.find((d) => String(d.id) === String(route.driverAssigned));
       const vehicle = vehicles.find((v) => String(v.id) === String(route.vehicleAssigned));

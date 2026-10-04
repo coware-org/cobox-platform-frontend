@@ -1,57 +1,37 @@
-import { useMemo, useState } from 'react';
-import { isAxiosError } from 'axios';
-import { BrainCircuit, RefreshCw, SearchX } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import { BrainCircuit, Eye, RefreshCw, TriangleAlert } from 'lucide-react';
 import { ApiErrorState } from '@/components/shared';
+import {
+  DegradedSectionsBanner,
+  EmptyState,
+} from '@/components/common';
 import { Button, Card, Select, Skeleton } from '@/components/ui';
 import { cn } from '@/utils';
-import { AiAlertCard, CategoryProgress, StatsCard } from '../components';
-import { useDashboard, useEvidenceAnalysis, useSmartVisionAlerts } from '../hooks';
-import type { AiAlert, AlertStatus, EvidenceAnalysis } from '../types';
+import {
+  AlertDetailDrawer,
+  AlertSeverityBadge,
+  AlertStatusBadge,
+} from '@/features/alerts/components';
+import { useAlerts } from '@/features/alerts/hooks';
+import type { Alert, AlertStatus } from '@/features/alerts/types';
+import { CategoryProgress, StatsCard } from '../components';
+import { useSmartVisionSummary } from '../hooks';
 
-const statusOptions: Array<{ value: '' | AlertStatus; label: string }> = [
+const columnHelper = createColumnHelper<Alert>();
+
+const statusOptions: { value: '' | AlertStatus; label: string }[] = [
   { value: '', label: 'Todas' },
   { value: 'OPEN', label: 'Abiertas' },
   { value: 'ACKNOWLEDGED', label: 'Reconocidas' },
   { value: 'RESOLVED', label: 'Resueltas' },
 ];
-
-const analysisLabels: Record<EvidenceAnalysis['status'], string> = {
-  PENDING: 'Pendiente',
-  PROCESSING: 'Procesando',
-  COMPLETED: 'Completada',
-  FAILED: 'Fallida',
-  REVIEW_REQUIRED: 'Requiere revision',
-  RECAPTURE_REQUIRED: 'Requiere recaptura',
-  FRAUD_SUSPECTED: 'Fraude sospechado',
-  DEGRADED: 'Degradada',
-};
-
-function SmartVisionSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-10 w-10 rounded-xl" />
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-52" />
-          <Skeleton className="h-4 w-80 max-w-full" />
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <Skeleton key={index} className="h-36" />
-        ))}
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-28" />
-          ))}
-        </div>
-        <Skeleton className="h-80" />
-      </div>
-    </div>
-  );
-}
 
 function formatDateTime(value?: string | null) {
   if (!value) return '-';
@@ -63,128 +43,174 @@ function formatDateTime(value?: string | null) {
   }).format(date);
 }
 
-function formatScore(value: number | null) {
-  if (value === null || value === undefined) return '-';
-  const normalized = value <= 1 ? value * 100 : value;
-  return `${Math.round(normalized)}%`;
-}
-
-function DetailRow({ label, value }: { label: string; value: string | number | null | undefined }) {
+function SmartVisionSkeleton() {
   return (
-    <div>
-      <dt className="text-xs font-medium uppercase text-[#9CA3AF]">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-medium text-[#111827]">{value ?? '-'}</dd>
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <Skeleton key={index} className="h-36" />
+        ))}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-12" />
+          ))}
+        </div>
+        <Skeleton className="h-80" />
+      </div>
     </div>
   );
 }
 
-function AnalysisDetail({
-  alert,
-  onClose,
-}: {
-  alert: AiAlert;
-  onClose: () => void;
-}) {
-  const analysisQuery = useEvidenceAnalysis(alert.clientEvidenceId);
-  const analysis = analysisQuery.data;
-  const notFound = isAxiosError(analysisQuery.error) && analysisQuery.error.response?.status === 404;
-
-  return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-[#111827]">Analisis de evidencia</h2>
-          <p className="mt-1 break-all text-sm text-[#6B7280]">{alert.clientEvidenceId}</p>
-        </div>
-        <Button variant="ghost" onClick={onClose} className="h-9 px-3">
-          Cerrar
-        </Button>
-      </div>
-
-      {analysisQuery.isLoading ? (
-        <div className="mt-5 space-y-3">
-          <Skeleton className="h-16" />
-          <Skeleton className="h-32" />
-          <Skeleton className="h-20" />
-        </div>
-      ) : null}
-
-      {analysisQuery.isError ? (
-        <div className="mt-5 rounded-lg border border-dashed border-[#E5E7EB] p-4 text-sm text-[#6B7280]">
-          {notFound
-            ? 'La alerta existe, pero el analisis aun no esta disponible para esta evidencia.'
-            : 'No se pudo cargar el analisis de esta evidencia.'}
-        </div>
-      ) : null}
-
-      {analysis ? (
-        <div className="mt-5 space-y-5">
-          <div className="rounded-lg border border-[#E5E7EB] bg-slate-50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase text-[#64748B]">Estado IA</p>
-                <p className="mt-1 text-base font-semibold text-[#111827]">{analysisLabels[analysis.status]}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs uppercase text-[#64748B]">Proveedor</p>
-                <p className="mt-1 text-base font-semibold text-[#111827]">{analysis.provider ?? '-'}</p>
-              </div>
-            </div>
-          </div>
-
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <DetailRow label="Conductor" value={analysis.driverId ? `#${analysis.driverId}` : null} />
-            <DetailRow label="Orden" value={analysis.orderId ? `#${analysis.orderId}` : null} />
-            <DetailRow label="Ruta" value={analysis.routeId ? `#${analysis.routeId}` : null} />
-            <DetailRow label="Tipo" value={analysis.evidenceType} />
-            <DetailRow label="Confianza" value={formatScore(analysis.confidenceScore)} />
-            <DetailRow label="Fraude" value={formatScore(analysis.fraudScore)} />
-            <DetailRow label="Creado" value={formatDateTime(analysis.createdAt)} />
-            <DetailRow label="Completado" value={formatDateTime(analysis.completedAt)} />
-          </dl>
-
-          <div>
-            <p className="text-xs font-medium uppercase text-[#9CA3AF]">Resumen</p>
-            <p className="mt-2 rounded-lg border border-[#E5E7EB] bg-white p-3 text-sm text-[#374151]">
-              {analysis.validationSummary ?? analysis.failureReason ?? 'Sin resumen registrado.'}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs font-medium uppercase text-[#9CA3AF]">Objeto S3</p>
-            <p className="mt-2 break-all rounded-lg border border-[#E5E7EB] bg-white p-3 text-xs text-[#6B7280]">
-              {analysis.objectKey}
-            </p>
-          </div>
-        </div>
-      ) : null}
-    </Card>
-  );
-}
-
 export function SmartVisionPage() {
-  const [statusFilter, setStatusFilter] = useState<'' | AlertStatus>('');
-  const [selectedAlert, setSelectedAlert] = useState<AiAlert | null>(null);
-  const dashboard = useDashboard();
-  const alertsQuery = useSmartVisionAlerts(statusFilter || undefined);
-  const alerts = alertsQuery.data ?? [];
+  const [searchParams] = useSearchParams();
+  const alertIdParam = searchParams.get('alertId');
 
-  const selectedAlertInList = useMemo(
-    () => alerts.find((alert) => alert.alertId === selectedAlert?.alertId) ?? null,
-    [alerts, selectedAlert],
+  const [statusFilter, setStatusFilter] = useState<'' | AlertStatus>('');
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(
+    alertIdParam,
   );
 
-  const activeAlert = selectedAlertInList ?? selectedAlert;
+  // Indicadores: siempre sobre el total de alertas (sin filtro de estado).
+  const summary = useSmartVisionSummary();
+  // Listado: respeta el filtro por estado.
+  const alertsQuery = useAlerts(statusFilter || undefined);
 
-  if (dashboard.isLoading && alertsQuery.isLoading) return <SmartVisionSkeleton />;
+  const alerts = useMemo(
+    () => alertsQuery.data?.alerts ?? [],
+    [alertsQuery.data],
+  );
+  const degradedSections = alertsQuery.data?.degradedSections ?? [];
 
-  if (dashboard.isError || alertsQuery.isError) {
+  // Permite abrir el detalle desde navegacion contextual (?alertId=...).
+  useEffect(() => {
+    if (alertIdParam) setSelectedAlertId(alertIdParam);
+  }, [alertIdParam]);
+
+  const selectedAlert = useMemo(
+    () =>
+      selectedAlertId
+        ? (alerts.find((alert) => alert.alertId === selectedAlertId) ?? null)
+        : null,
+    [alerts, selectedAlertId],
+  );
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('severity', {
+        header: 'Severidad',
+        cell: (info) => <AlertSeverityBadge severity={info.getValue()} />,
+      }),
+      columnHelper.accessor('status', {
+        header: 'Estado',
+        cell: (info) => <AlertStatusBadge status={info.getValue()} />,
+      }),
+      columnHelper.accessor('type', {
+        header: 'Tipo',
+        cell: (info) => {
+          const row = info.row.original;
+          const label = row.type ?? row.analysisSummary ?? '-';
+          return (
+            <span className="block max-w-[18rem] truncate text-sm text-gray-700">
+              {label}
+            </span>
+          );
+        },
+      }),
+      columnHelper.accessor('driverName', {
+        header: 'Conductor',
+        cell: (info) => {
+          const row = info.row.original;
+          const label = row.driverName
+            ? row.driverName
+            : row.driverId
+              ? `Conductor #${row.driverId}`
+              : '-';
+          return <span className="text-sm text-gray-600">{label}</span>;
+        },
+      }),
+      columnHelper.accessor('vehiclePlate', {
+        header: 'Vehiculo',
+        cell: (info) => {
+          const row = info.row.original;
+          const label = row.vehiclePlate
+            ? row.vehiclePlate
+            : row.vehicleId
+              ? `Vehiculo #${row.vehicleId}`
+              : '-';
+          return <span className="text-sm text-gray-600">{label}</span>;
+        },
+      }),
+      columnHelper.accessor('routeTitle', {
+        header: 'Ruta',
+        cell: (info) => {
+          const row = info.row.original;
+          const label = row.routeTitle
+            ? row.routeId
+              ? `${row.routeTitle} (#${row.routeId})`
+              : row.routeTitle
+            : row.routeId
+              ? `Ruta #${row.routeId}`
+              : '-';
+          return <span className="text-sm text-gray-600">{label}</span>;
+        },
+      }),
+      columnHelper.accessor('orderLabel', {
+        header: 'Orden',
+        cell: (info) => {
+          const row = info.row.original;
+          const label = row.orderLabel
+            ? row.orderLabel
+            : row.orderId
+              ? `Orden #${row.orderId}`
+              : '-';
+          return <span className="text-sm text-gray-600">{label}</span>;
+        },
+      }),
+      columnHelper.accessor('createdAt', {
+        header: 'Fecha',
+        cell: (info) => (
+          <span className="text-sm text-gray-600">
+            {formatDateTime(info.getValue())}
+          </span>
+        ),
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: '',
+        cell: (info) => (
+          <button
+            type="button"
+            onClick={() => setSelectedAlertId(info.row.original.alertId)}
+            className="rounded-md p-1 text-[#0F766E] hover:bg-[#DFF6F1]"
+            title="Ver detalle"
+            aria-label={`Ver detalle de la alerta ${info.row.original.alertId}`}
+          >
+            <Eye className="h-4 w-4" />
+          </button>
+        ),
+      }),
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: alerts,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  const isInitialLoading =
+    alertsQuery.isLoading && !alertsQuery.data && summary.isLoading;
+
+  if (summary.isError && alertsQuery.isError) {
     return (
       <ApiErrorState
         title="No se pudo cargar SmartVision"
-        message="Verifica que el gateway exponga /api/v1/ai-validation y que tu sesion tenga token valido."
+        message="No pudimos consultar la bandeja de alertas de SmartVision. Verifica que el gateway exponga /api/v1/desktop/smartvision y que tu sesion tenga un token valido."
         onRetry={() => {
-          void dashboard.refetch();
+          void summary.refetch();
           void alertsQuery.refetch();
         }}
       />
@@ -199,10 +225,14 @@ export function SmartVisionPage() {
             <BrainCircuit className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[#111827]">SmartVision AI</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
+              SmartVision IA
+            </h1>
             <p className="mt-0.5 text-sm text-[#6B7280]">
-              Validacion asincronica de evidencias con inteligencia artificial
-              {alertsQuery.isFetching || dashboard.isFetching ? ' · Actualizando...' : ''}
+              Bandeja principal de alertas de IA
+              {alertsQuery.isFetching || summary.isFetching
+                ? ' · Actualizando...'
+                : ''}
             </p>
           </div>
         </div>
@@ -210,10 +240,9 @@ export function SmartVisionPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <Select
             value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value as '' | AlertStatus);
-              setSelectedAlert(null);
-            }}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as '' | AlertStatus)
+            }
             className="w-full sm:w-44"
             aria-label="Filtrar alertas por estado"
           >
@@ -226,70 +255,186 @@ export function SmartVisionPage() {
           <Button
             variant="secondary"
             onClick={() => {
-              void dashboard.refetch();
+              void summary.refetch();
               void alertsQuery.refetch();
             }}
-            disabled={alertsQuery.isFetching || dashboard.isFetching}
+            disabled={alertsQuery.isFetching || summary.isFetching}
           >
             <RefreshCw
-              className={cn('h-4 w-4', (alertsQuery.isFetching || dashboard.isFetching) && 'animate-spin')}
+              className={cn(
+                'h-4 w-4',
+                (alertsQuery.isFetching || summary.isFetching) && 'animate-spin',
+              )}
             />
             Refrescar
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {dashboard.kpis.map((kpi, index) => (
-          <StatsCard key={kpi.id} kpi={kpi} index={index} />
-        ))}
-      </div>
+      <DegradedSectionsBanner sections={degradedSections} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-[#111827]">Alertas de evidencia</h2>
-            <span className="text-sm text-[#6B7280]">{alerts.length} resultados</span>
+      {isInitialLoading ? (
+        <SmartVisionSkeleton />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {summary.kpis.map((kpi, index) => (
+              <StatsCard key={kpi.id} kpi={kpi} index={index} />
+            ))}
           </div>
 
-          {alerts.length === 0 ? (
-            <Card className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-[#64748B]">
-                <SearchX className="h-6 w-6" />
+          <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-[#111827]">
+                  Alertas
+                </h2>
+                <span className="text-sm text-[#6B7280]">
+                  {alerts.length} resultados
+                </span>
               </div>
-              <h3 className="mt-4 text-base font-semibold text-[#111827]">Sin alertas para mostrar</h3>
-              <p className="mt-2 max-w-md text-sm text-[#6B7280]">
-                Cuando `ai-validation-service` procese evidencias confirmadas, las alertas apareceran aqui.
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {alerts.map((alert, index) => (
-                <AiAlertCard
-                  key={alert.alertId}
-                  alert={alert}
-                  index={index}
-                  isSelected={activeAlert?.alertId === alert.alertId}
-                  onSelect={setSelectedAlert}
-                />
-              ))}
-            </div>
-          )}
-        </div>
 
-        <div className="space-y-4">
-          {activeAlert ? (
-            <AnalysisDetail alert={activeAlert} onClose={() => setSelectedAlert(null)} />
-          ) : (
-            <>
-              <h2 className="text-lg font-semibold text-[#111827]">Deteccion por categoria</h2>
-              <Card className="p-5 shadow-sm">
-                <CategoryProgress categories={dashboard.categories} />
-              </Card>
-            </>
-          )}
-        </div>
-      </div>
+              {alertsQuery.isError && alerts.length === 0 ? (
+                <ApiErrorState
+                  title="Error al cargar alertas"
+                  message="No pudimos cargar la bandeja de alertas."
+                  onRetry={() => void alertsQuery.refetch()}
+                />
+              ) : alerts.length === 0 ? (
+                <EmptyState
+                  title="No hay alertas para mostrar"
+                  description={
+                    statusFilter
+                      ? 'Ninguna alerta coincide con el filtro de estado seleccionado.'
+                      : 'Cuando SmartVision detecte una anomalia en una evidencia, aparecera aqui.'
+                  }
+                />
+              ) : (
+                <Card className="overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-gray-200">
+                        {table.getHeaderGroups().map((headerGroup) => (
+                          <tr key={headerGroup.id}>
+                            {headerGroup.headers.map((header) => (
+                              <th
+                                key={header.id}
+                                className="px-4 py-3 text-left font-semibold text-gray-700"
+                              >
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
+                              </th>
+                            ))}
+                          </tr>
+                        ))}
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {alertsQuery.isFetching ? (
+                          <tr>
+                            <td colSpan={columns.length} className="px-4 py-4">
+                              <Skeleton className="h-8 w-full" />
+                            </td>
+                          </tr>
+                        ) : (
+                          table.getRowModel().rows.map((row) => (
+                            <tr
+                              key={row.id}
+                              onClick={() =>
+                                setSelectedAlertId(row.original.alertId)
+                              }
+                              className={cn(
+                                'cursor-pointer hover:bg-slate-50',
+                                selectedAlertId === row.original.alertId &&
+                                  'bg-[#DFF6F1]/50',
+                              )}
+                            >
+                              {row.getVisibleCells().map((cell) => (
+                                <td key={cell.id} className="px-4 py-3">
+                                  {flexRender(
+                                    cell.column.columnDef.cell,
+                                    cell.getContext(),
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h2 className="mb-3 text-lg font-semibold text-[#111827]">
+                  Distribucion por categoria
+                </h2>
+                <Card className="p-5 shadow-sm">
+                  <CategoryProgress categories={summary.categories} />
+                </Card>
+              </div>
+
+              <div>
+                <h2 className="mb-3 text-lg font-semibold text-[#111827]">
+                  Alertas de alta severidad
+                </h2>
+                <Card className="divide-y divide-gray-200">
+                  {summary.isLoading ? (
+                    <div className="space-y-3 p-4">
+                      <Skeleton className="h-10" />
+                      <Skeleton className="h-10" />
+                    </div>
+                  ) : summary.highSeverityAlerts.length === 0 ? (
+                    <p className="p-4 text-sm text-gray-500">
+                      Sin alertas de severidad alta o critica.
+                    </p>
+                  ) : (
+                    summary.highSeverityAlerts
+                      .slice(0, 8)
+                      .map((alert) => (
+                        <button
+                          key={alert.alertId}
+                          type="button"
+                          onClick={() => setSelectedAlertId(alert.alertId)}
+                          className={cn(
+                            'flex w-full items-start gap-3 p-3 text-left hover:bg-slate-50',
+                            selectedAlertId === alert.alertId && 'bg-[#DFF6F1]/50',
+                          )}
+                        >
+                          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#EF4444]" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-gray-900">
+                              {alert.type ?? 'Sin categoria'}
+                            </span>
+                            <span className="block truncate text-xs text-gray-500">
+                              {alert.driverName ?? 'Conductor sin asignar'} ·{' '}
+                              {formatDateTime(alert.createdAt)}
+                            </span>
+                          </span>
+                          <AlertStatusBadge status={alert.status} />
+                        </button>
+                      ))
+                  )}
+                </Card>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {selectedAlertId ? (
+        <AlertDetailDrawer
+          alertId={selectedAlertId}
+          fallbackAlert={selectedAlert}
+          onClose={() => setSelectedAlertId(null)}
+        />
+      ) : null}
     </section>
   );
 }

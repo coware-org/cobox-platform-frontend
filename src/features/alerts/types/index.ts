@@ -8,6 +8,9 @@ export type BackendAlertResource = {
   alertId: string;
   status: AlertStatus;
   severity: AlertSeverity;
+  /** Categoria de la deteccion (usada para la distribucion por categoria). */
+  type?: string | null;
+  message?: string | null;
   driverId?: number | null;
   driverName?: string | null;
   routeId?: number | null;
@@ -24,7 +27,7 @@ export type BackendAlertResource = {
   linkedIncidentId?: string | null;
 };
 
-export type AlertDetailResource = BackendAlertResource & {
+export type BackendAlertDetailResource = BackendAlertResource & {
   evidenceId?: string | null;
   analysisId?: string | null;
   analysisData?: Record<string, unknown> | null;
@@ -41,20 +44,38 @@ export type Alert = {
   alertId: string;
   status: AlertStatus;
   severity: AlertSeverity;
-  driverId?: number | null;
-  driverName?: string | null;
-  routeId?: number | null;
-  routeTitle?: string | null;
-  vehicleId?: number | null;
-  vehiclePlate?: string | null;
-  orderId?: number | null;
-  orderLabel?: string | null;
-  evidenceUrl?: string | null;
-  analysisSummary?: string | null;
+  type: string | null;
+  message: string | null;
+  driverId: number | null;
+  driverName: string | null;
+  routeId: number | null;
+  routeTitle: string | null;
+  vehicleId: number | null;
+  vehiclePlate: string | null;
+  orderId: number | null;
+  orderLabel: string | null;
+  evidenceUrl: string | null;
+  analysisSummary: string | null;
   createdAt: string;
-  acknowledgedAt?: string | null;
-  resolvedAt?: string | null;
-  linkedIncidentId?: string | null;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  linkedIncidentId: string | null;
+};
+
+/**
+ * Detalle de la alerta (ai-validation). Mantiene su propio estado,
+ * independiente del estado del analisis de evidencia y del incidente.
+ */
+export type AlertDetail = Alert & {
+  evidenceId: string | null;
+  analysisId: string | null;
+  analysisData: Record<string, unknown> | null;
+  aiConfidence: number | null;
+  incidentType: string | null;
+  acknowledgedBy: number | null;
+  resolvedBy: number | null;
+  resolutionNotes: string | null;
+  linkedIncidentUuid: string | null;
 };
 
 export type ResolveAlertPayload = {

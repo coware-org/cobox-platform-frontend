@@ -14,11 +14,22 @@ function ensureArray<T>(value: unknown): T[] {
   return [];
 }
 
+function firstText(...candidates: (string | null | undefined)[]): string {
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (value) return value;
+  }
+  return '';
+}
+
 function toDriver(resource: BackendDriverResource): Driver {
+  const fullName = firstText(resource.fullName) || null;
+
   return {
     id: String(resource.id),
-    email: resource.email,
-    licenceNumber: resource.licenceNumber,
+    email: firstText(resource.email) || fullName || '',
+    fullName,
+    licenceNumber: firstText(resource.licenceNumber),
     status: resource.driverStatus,
   };
 }

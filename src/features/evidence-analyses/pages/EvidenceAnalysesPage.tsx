@@ -1,21 +1,31 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { AlertTriangle, Eye } from 'lucide-react';
-import { Button, Card, Input, Skeleton } from '@/components/ui';
+import { Eye } from 'lucide-react';
+import { Button, Card, Input, Select, Skeleton } from '@/components/ui';
 import { ApiErrorState } from '@/components/shared';
-import { DegradedSectionsBanner, PageHeader } from '@/components/common';
-import { useEvidenceAnalyses } from '../hooks';
+import {
+  DegradedSectionsBanner,
+  DetailDrawer,
+  EmptyState,
+  PageHeader,
+} from '@/components/common';
+import { toEvidenceAnalysisView } from '../services';
+import { useEvidenceAnalyses, useEvidenceAnalysisDetail } from '../hooks';
 import type {
   EvidenceAnalysis,
   EvidenceAnalysisFilters,
   EvidenceAnalysisStatus,
 } from '../types';
-import { EvidenceAnalysisStatusBadge, EvidenceAnalysisDetailPanel } from '../components';
+import {
+  EvidenceAnalysisDetail,
+  EvidenceAnalysisStatusBadge,
+} from '../components';
 
 const columnHelper = createColumnHelper<EvidenceAnalysis>();
 
@@ -26,12 +36,15 @@ const statusOptions: EvidenceAnalysisStatus[] = [
   'REJECTED',
 ];
 
-const toFilterNumber = (v: string): number | undefined => {
-  const n = Number(v?.trim());
-  return Number.isFinite(n) && n > 0 ? n : undefined;
+const toFilterNumber = (value: string): number | undefined => {
+  const parsed = Number(value?.trim());
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
 export function EvidenceAnalysesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const evidenceIdParam = searchParams.get('evidenceId');
+
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [driverIdInput, setDriverIdInput] = useState('');
   const [routeIdInput, setRouteIdInput] = useState('');
@@ -49,20 +62,35 @@ export function EvidenceAnalysesPage() {
   );
 
   const query = useEvidenceAnalyses(filters);
-  const summary = query.data;
+  const analyses = useMemo(() => query.data?.analyses ?? [], [query.data]);
 
-  const analyses = useMemo<EvidenceAnalysis[]>(() => summary?.analyses ?? [], [summary]);
-
-  const activeAnalysis = useMemo(
-    () => analyses.find((a) => a.analysisId === selectedAnalysisId) ?? null,
+  const selectedRecord = useMemo(
+    () =>
+      selectedAnalysisId
+        ? (analyses.find(
+            (analysis) => analysis.analysisId === selectedAnalysisId,
+          ) ?? null)
+        : null,
     [analyses, selectedAnalysisId],
+  );
+
+  /**
+   * Navegacion contextual: /evidence-analyses?evidenceId=...
+   * El historial del BFF no expone el id de evidencia, asi que el deep link
+   * se resuelve con el analisis puntual de ai-validation (mismo componente).
+   */
+  const needsExternalDetail = Boolean(evidenceIdParam) && !selectedRecord;
+  const detailQuery = useEvidenceAnalysisDetail(
+    needsExternalDetail ? evidenceIdParam : null,
   );
 
   const columns = [
     columnHelper.accessor('analysisId', {
       header: 'ID',
       cell: (info) => (
-        <span className="font-mono text-xs">{info.getValue().slice(0, 8)}...</span>
+        <span className="font-mono text-xs">
+          {info.getValue().slice(0, 8)}...
+        </span>
       ),
     }),
     columnHelper.accessor('status', {
@@ -86,10 +114,10 @@ export function EvidenceAnalysesPage() {
       },
     }),
     columnHelper.accessor('vehiclePlate', {
-      header: 'Vehículo',
+      header: 'Vehiculo',
       cell: (info) => {
         const row = info.row.original;
-        const value = row.vehiclePlate ?? (row.vehicleId ? `Vehículo #${row.vehicleId}` : '-');
+        const value = row.vehiclePlate ?? (row.vehicleId ? `Vehiculo #${row.vehicleId}` : '-');
         return <span className="text-sm text-gray-600">{value}</span>;
       },
     }),
@@ -106,7 +134,7 @@ export function EvidenceAnalysesPage() {
       cell: (info) => {
         const labels = info.getValue() ?? [];
         return (
-          <span className="text-sm text-gray-600 truncate block max-w-xs">
+          <span className="block max-w-xs truncate text-sm text-gray-600">
             {labels.length > 0 ? labels.join(', ') : '-'}
           </span>
         );
@@ -125,11 +153,13 @@ export function EvidenceAnalysesPage() {
       header: '',
       cell: (info) => (
         <button
+          type="button"
           onClick={() => setSelectedAnalysisId(info.row.original.analysisId)}
-          className="text-blue-600 hover:text-blue-900 p-1"
+          className="rounded-md p-1 text-blue-600 hover:bg-blue-900"
           title="Ver detalles"
+          aria-label={`Ver detalle del analisis ${info.row.original.analysisId}`}
         >
-          <Eye className="w-4 h-4" />
+          <Eye className="h-4 w-4" />
         </button>
       ),
     }),
@@ -140,6 +170,12 @@ export function EvidenceAnalysesPage() {
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
+
+  const hasFilters =
+    statusFilter !== '' ||
+    driverIdInput !== '' ||
+    routeIdInput !== '' ||
+    orderIdInput !== '';
 
   if (query.isError) {
     return (
@@ -154,41 +190,40 @@ export function EvidenceAnalysesPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <PageHeader
-        title="Análisis de Evidencia"
-        description="Resultados de análisis de evidencia por IA SmartVision"
+        title="Historial de Análisis"
+        description="Todos los análisis de evidencia de IA, incluidos los que no generan alerta"
       />
 
-      <div className="px-4 md:px-8 py-6 space-y-6">
-        <DegradedSectionsBanner sections={summary?.degradedSections} />
+      <div className="space-y-6 px-4 py-6 md:px-8">
+        <DegradedSectionsBanner sections={query.data?.degradedSections} />
 
         <Card className="p-4">
-          <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex flex-col items-end gap-4 md:flex-row">
             <div className="w-full md:w-48">
               <label
-                htmlFor="status-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="analysis-status-filter"
+                className="mb-2 block text-sm font-medium text-gray-700"
               >
                 Estado
               </label>
-              <select
-                id="status-filter"
+              <Select
+                id="analysis-status-filter"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(event) => setStatusFilter(event.target.value)}
               >
                 <option value="">Todos</option>
-                {statusOptions.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div className="w-full md:w-40">
               <label
                 htmlFor="driver-id-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="mb-2 block text-sm font-medium text-gray-700"
               >
                 Conductor ID
               </label>
@@ -198,14 +233,14 @@ export function EvidenceAnalysesPage() {
                 min={1}
                 placeholder="ID"
                 value={driverIdInput}
-                onChange={(e) => setDriverIdInput(e.target.value)}
+                onChange={(event) => setDriverIdInput(event.target.value)}
               />
             </div>
 
             <div className="w-full md:w-40">
               <label
                 htmlFor="route-id-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="mb-2 block text-sm font-medium text-gray-700"
               >
                 Ruta ID
               </label>
@@ -215,14 +250,14 @@ export function EvidenceAnalysesPage() {
                 min={1}
                 placeholder="ID"
                 value={routeIdInput}
-                onChange={(e) => setRouteIdInput(e.target.value)}
+                onChange={(event) => setRouteIdInput(event.target.value)}
               />
             </div>
 
             <div className="w-full md:w-40">
               <label
                 htmlFor="order-id-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="mb-2 block text-sm font-medium text-gray-700"
               >
                 Orden ID
               </label>
@@ -232,7 +267,7 @@ export function EvidenceAnalysesPage() {
                 min={1}
                 placeholder="ID"
                 value={orderIdInput}
-                onChange={(e) => setOrderIdInput(e.target.value)}
+                onChange={(event) => setOrderIdInput(event.target.value)}
               />
             </div>
 
@@ -244,70 +279,109 @@ export function EvidenceAnalysesPage() {
                 setRouteIdInput('');
                 setOrderIdInput('');
               }}
+              disabled={!hasFilters}
             >
               Limpiar
             </Button>
           </div>
         </Card>
 
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-gray-200">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-6 py-3 text-left font-semibold text-gray-700"
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {query.isLoading ? (
-                  <tr>
-                    <td colSpan={columns.length} className="px-6 py-4">
-                      <Skeleton className="h-8 w-full" />
-                    </td>
-                  </tr>
-                ) : analyses.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className="px-6 py-8 text-center">
-                      <AlertTriangle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-600">No hay análisis de evidencia para mostrar</p>
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50">
+        {query.isLoading ? (
+          <Card className="overflow-hidden">
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          </Card>
+        ) : analyses.length === 0 ? (
+          <EmptyState
+            title="No hay análisis de evidencia para mostrar"
+            description={
+              hasFilters
+                ? 'Ninguno de los análisis coincide con los filtros aplicados.'
+                : 'Aún no se han registrado análisis de evidencia.'
+            }
+          />
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-gray-200">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <th
+                          key={header.id}
+                          className="px-6 py-3 text-left font-semibold text-gray-700"
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {table.getRowModel().rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() =>
+                        setSelectedAnalysisId(row.original.analysisId)
+                      }
+                      className="cursor-pointer hover:bg-slate-50"
+                    >
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id} className="px-6 py-4">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
                         </td>
                       ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
 
-      {activeAnalysis ? (
-        <EvidenceAnalysisDetailPanel
-          analysis={activeAnalysis}
+      {selectedRecord ? (
+        <DetailDrawer
+          title="Detalle de análisis"
+          subtitle={
+            <span className="font-mono break-all">{selectedRecord.analysisId}</span>
+          }
           onClose={() => setSelectedAnalysisId(null)}
-        />
+          width="md:w-[36rem]"
+        >
+          <EvidenceAnalysisDetail analysis={toEvidenceAnalysisView(selectedRecord)} />
+        </DetailDrawer>
+      ) : null}
+
+      {needsExternalDetail && evidenceIdParam ? (
+        <DetailDrawer
+          title="Detalle de análisis"
+          subtitle={
+            <span className="font-mono break-all">{evidenceIdParam}</span>
+          }
+          onClose={() => setSearchParams({})}
+          width="md:w-[36rem]"
+        >
+          <EvidenceAnalysisDetail
+            analysis={detailQuery.data}
+            isLoading={detailQuery.isLoading}
+            error={detailQuery.error}
+            onRetry={() => void detailQuery.refetch()}
+            emptyMessage="No encontramos un análisis para esta evidencia."
+          />
+        </DetailDrawer>
       ) : null}
     </div>
   );

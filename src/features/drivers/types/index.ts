@@ -10,8 +10,9 @@ export type DriverStatus = BackendDriverStatus;
 
 export type BackendDriverResource = {
   id: number;
-  email: string;
-  licenceNumber: string;
+  email: string | null;
+  fullName?: string | null;
+  licenceNumber: string | null;
   driverStatus: BackendDriverStatus;
 };
 
@@ -23,6 +24,7 @@ export type CreateDriverPayload = {
 export type Driver = {
   id: string;
   email: string;
+  fullName: string | null;
   licenceNumber: string;
   status: DriverStatus;
 };

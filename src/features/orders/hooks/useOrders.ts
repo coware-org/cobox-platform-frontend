@@ -1,10 +1,76 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ordersService } from '../services/ordersService';
-import { useRoutes } from '@/modules/routes';
-import { useDrivers } from '@/modules/drivers';
-import { useVehicles } from '@/modules/vehicles';
+import { useRoutes } from '@/features/routes/hooks';
+import { useDrivers } from '@/features/drivers/hooks';
+import { useVehicles } from '@/features/vehicles/hooks';
+import type { Driver } from '@/features/drivers/types';
+import type { Route } from '@/features/routes/types';
+import type { Vehicle } from '@/features/vehicles/types';
 import type { CreateOrderPayload, MarkAsCompletedPayload, Order } from '../types';
+
+function getDriverDisplayName(driver: Driver): string {
+  return driver.fullName ?? driver.email;
+}
+
+/**
+ * Indexa las ordenes por id a partir de las rutas que las contienen.
+ * Una orden sigue perteneciendo a su ruta aunque ya figure en `finishedOrderIds`,
+ * por lo que se consideran ambas listas.
+ */
+function indexRoutesByOrderId(routes: Route[]): Map<string, Route> {
+  const routeByOrderId = new Map<string, Route>();
+
+  for (const route of routes) {
+    for (const orderId of [...(route.orderIds ?? []), ...(route.finishedOrderIds ?? [])]) {
+      if (!routeByOrderId.has(orderId)) {
+        routeByOrderId.set(orderId, route);
+      }
+    }
+  }
+
+  return routeByOrderId;
+}
+
+/**
+ * Cruza Orden -> Ruta -> Conductor/Vehiculo. La orden nunca duplica estos datos:
+ * los hereda de la ruta que tiene asignada actualmente.
+ */
+function resolveAssignment(
+  order: Order,
+  routeByOrderId: Map<string, Route>,
+  driverById: Map<string, Driver>,
+  vehicleById: Map<string, Vehicle>,
+): Order['assignment'] {
+  const route = routeByOrderId.get(order.id);
+  const apiAssignment = order.assignment;
+
+  if (!route) {
+    return apiAssignment;
+  }
+
+  const driver = route.driverId ? driverById.get(route.driverId) : undefined;
+  const vehicle = route.vehicleId ? vehicleById.get(route.vehicleId) : undefined;
+
+  return {
+    routeId: route.id,
+    routeTitle: route.title,
+    driverId: route.driverId ?? apiAssignment.driverId,
+    driverName: driver
+      ? getDriverDisplayName(driver)
+      : route.driverId
+        ? apiAssignment.driverName ?? `Conductor #${route.driverId}`
+        : null,
+    driverEmail: driver?.email ?? apiAssignment.driverEmail,
+    driverLicenceNumber: driver?.licenceNumber ?? apiAssignment.driverLicenceNumber,
+    vehicleId: route.vehicleId ?? apiAssignment.vehicleId,
+    vehiclePlate: vehicle
+      ? vehicle.plateNumber
+      : route.vehicleId
+        ? apiAssignment.vehiclePlate ?? `Vehículo #${route.vehicleId}`
+        : null,
+  };
+}
 
 export function useOrders() {
   const ordersQuery = useQuery({
@@ -37,43 +103,14 @@ export function useOrders() {
   const vehicles = vehiclesQuery.data;
 
   const enrichedOrders: Order[] = useMemo(() => {
-    return (data || []).map((order) => {
-    // Buscar si esta orden pertenece a alguna ruta
-    const assignedRoute = (routes || []).find((r) => {
-      // route.ordersIds contiene orderId en formato { orderId: number } o similar según API
-      const orderIds = (r as any).ordersIds || [];
-      return orderIds.some((o: any) => {
-        if (typeof o === 'object' && o !== null && 'orderId' in o) {
-          return String(o.orderId) === String(order.id);
-        }
-        return String(o) === String(order.id);
-      });
-    });
+    const routeByOrderId = indexRoutesByOrderId(routes ?? []);
+    const driverById = new Map((drivers ?? []).map((driver) => [driver.id, driver]));
+    const vehicleById = new Map((vehicles ?? []).map((vehicle) => [vehicle.id, vehicle]));
 
-    let driverName: string | undefined;
-    let vehiclePlate: string | undefined;
-
-    if (assignedRoute) {
-      // Buscar conductor
-      if (assignedRoute.driverAssigned) {
-        const driver = (drivers || []).find((d) => String(d.id) === String(assignedRoute.driverAssigned));
-        driverName = driver ? driver.name : `Conductor #${assignedRoute.driverAssigned}`;
-      }
-
-      // Buscar vehículo
-      if (assignedRoute.vehicleAssigned) {
-        const vehicle = (vehicles || []).find((v) => String(v.id) === String(assignedRoute.vehicleAssigned));
-        vehiclePlate = vehicle ? vehicle.plate : `Vehículo #${assignedRoute.vehicleAssigned}`;
-      }
-    }
-
-    return {
+    return (data ?? []).map((order) => ({
       ...order,
-      assignedRouteId: assignedRoute?.id,
-      driverName,
-      vehiclePlate,
-    };
-    });
+      assignment: resolveAssignment(order, routeByOrderId, driverById, vehicleById),
+    }));
   }, [data, routes, drivers, vehicles]);
 
   return {
@@ -95,6 +132,14 @@ export function useCreateOrder() {
   });
 }
 
+/**
+ * Solo el estado proviene de la respuesta de la orden: la asignación se conserva
+ * porque su fuente de verdad es la ruta (`useRoutes`), no el PATCH de estado.
+ */
+function updateOrderStatus(cache: Order[], updatedOrder: Order): Order[] {
+  return cache.map((order) => (order.id === updatedOrder.id ? { ...order, status: updatedOrder.status } : order));
+}
+
 export function useMarkOrderReady() {
   const queryClient = useQueryClient();
 
@@ -102,7 +147,7 @@ export function useMarkOrderReady() {
     mutationFn: (orderId: string) => ordersService.markReadyForDispatch(orderId),
     onSuccess: (updatedOrder) => {
       queryClient.setQueryData<Order[]>(['orders'], (current) =>
-        (current ?? []).map((order) => (order.id === updatedOrder.id ? { ...order, status: updatedOrder.status } : order)),
+        updateOrderStatus(current ?? [], updatedOrder),
       );
       void queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
@@ -116,7 +161,7 @@ export function useMarkOrderInTransit() {
     mutationFn: (orderId: string) => ordersService.markInTransit(orderId),
     onSuccess: (updatedOrder) => {
       queryClient.setQueryData<Order[]>(['orders'], (current) =>
-        (current ?? []).map((order) => (order.id === updatedOrder.id ? { ...order, status: updatedOrder.status } : order)),
+        updateOrderStatus(current ?? [], updatedOrder),
       );
       void queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
@@ -131,7 +176,7 @@ export function useMarkOrderCompleted() {
       ordersService.markCompleted(orderId, payload),
     onSuccess: (updatedOrder) => {
       queryClient.setQueryData<Order[]>(['orders'], (current) =>
-        (current ?? []).map((order) => (order.id === updatedOrder.id ? { ...order, status: updatedOrder.status } : order)),
+        updateOrderStatus(current ?? [], updatedOrder),
       );
       void queryClient.invalidateQueries({ queryKey: ['orders'] });
       // También invalidamos rutas porque finalizar una orden puede completar la ruta en el backend

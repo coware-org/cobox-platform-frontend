@@ -16,10 +16,12 @@ import {
   Package,
   X,
   MapPin,
+  RouteIcon,
 } from 'lucide-react';
 import { Badge, Button, Card, Input, Skeleton, useToast } from '@/components/ui';
 import { ApiErrorState } from '@/components/shared';
-import { useRoutes } from '@/modules/routes';
+import { useAddOrderToRoute, useRoutes } from '@/features/routes/hooks';
+import { validatePositiveId } from '@/features/routes/validations';
 import {
   useOrders,
   useCreateOrder,
@@ -27,8 +29,9 @@ import {
   useMarkOrderInTransit,
   useMarkOrderCompleted,
 } from '../hooks';
-import type { Order, OrderStatus } from '../types';
+import type { Order, OrderAssignment, OrderStatus } from '../types';
 import {
+  AssignRouteToOrderDialog,
   OrderTraceability,
   OrderFormDialog,
   CompleteOrderDialog,
@@ -60,7 +63,9 @@ export function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | OrderStatus>('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCompleteOpen, setIsCompleteOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isAssignRouteOpen, setIsAssignRouteOpen] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const { toast } = useToast();
   const ordersQuery = useOrders();
@@ -70,9 +75,17 @@ export function OrdersPage() {
   const markReadyMutation = useMarkOrderReady();
   const markInTransitMutation = useMarkOrderInTransit();
   const markCompletedMutation = useMarkOrderCompleted();
+  const addOrderToRouteMutation = useAddOrderToRoute();
 
   const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
   const routes = useMemo(() => routesQuery.data ?? [], [routesQuery.data]);
+
+  // El detalle se deriva de la lista viva para que lista y detalle muestren
+  // siempre el mismo conductor/vehículo sin recargar la página.
+  const selectedOrder = useMemo(
+    () => orders.find((order) => order.id === selectedOrderId) ?? null,
+    [orders, selectedOrderId],
+  );
 
   const filteredOrders = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -112,10 +125,7 @@ export function OrdersPage() {
 
   const handleMarkReady = (orderId: string) => {
     markReadyMutation.mutate(orderId, {
-      onSuccess: (updated) => {
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder((prev) => prev ? { ...prev, status: updated.status } : null);
-        }
+      onSuccess: () => {
         toast({ title: 'Orden lista para despacho', type: 'success' });
       },
       onError: (err) => {
@@ -129,10 +139,7 @@ export function OrdersPage() {
 
   const handleMarkInTransit = (orderId: string) => {
     markInTransitMutation.mutate(orderId, {
-      onSuccess: (updated) => {
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder((prev) => prev ? { ...prev, status: updated.status } : null);
-        }
+      onSuccess: () => {
         toast({ title: 'Orden iniciada en tránsito', type: 'success' });
       },
       onError: (err) => {
@@ -149,8 +156,7 @@ export function OrdersPage() {
     markCompletedMutation.mutate(
       { orderId: selectedOrder.id, payload: evidencePayload },
       {
-        onSuccess: (updated) => {
-          setSelectedOrder((prev) => prev ? { ...prev, status: updated.status } : null);
+        onSuccess: () => {
           setIsCompleteOpen(false);
           toast({ title: 'Entrega registrada exitosamente', type: 'success' });
         },
@@ -161,6 +167,38 @@ export function OrdersPage() {
           toast({ title: msg, type: 'error' });
         },
       }
+    );
+  };
+
+  const openAssignRoute = () => {
+    setSelectedRouteId('');
+    setIsAssignRouteOpen(true);
+  };
+
+  const handleAssignRoute = () => {
+    if (!selectedOrder || !selectedRouteId) return;
+
+    const validationError = validatePositiveId(selectedRouteId, 'La ruta');
+    if (validationError) {
+      toast({ title: validationError, type: 'error' });
+      return;
+    }
+
+    addOrderToRouteMutation.mutate(
+      { routeId: selectedRouteId, payload: { orderId: selectedOrder.id } },
+      {
+        onSuccess: () => {
+          setIsAssignRouteOpen(false);
+          setSelectedRouteId('');
+          toast({ title: 'Ruta asignada a la orden', type: 'success' });
+        },
+        onError: (err) => {
+          const msg = isAxiosError(err)
+            ? (err.response?.data as { message?: string })?.message ?? 'No se pudo asignar la ruta'
+            : 'Error en la petición';
+          toast({ title: msg, type: 'error' });
+        },
+      },
     );
   };
 
@@ -183,20 +221,10 @@ export function OrdersPage() {
         header: 'Peso (Kg)',
         cell: (info) => <span className="text-slate-600 font-medium">{info.getValue()} kg</span>,
       }),
-      columnHelper.accessor('driverName', {
+      columnHelper.display({
+        id: 'driverVehicle',
         header: 'Conductor / Vehículo',
-        cell: (info) => (
-          <div className="flex flex-col text-xs">
-            {info.getValue() ? (
-              <>
-                <span className="font-medium text-slate-800">{info.getValue()}</span>
-                <span className="text-[#64748B]">Placa: {info.row.original.vehiclePlate}</span>
-              </>
-            ) : (
-              <span className="text-[#64748B] italic">Sin asignar a ruta</span>
-            )}
-          </div>
-        ),
+        cell: ({ row }) => <DriverVehicleCell assignment={row.original.assignment} />,
       }),
       columnHelper.accessor('status', {
         header: 'Estado',
@@ -213,7 +241,7 @@ export function OrdersPage() {
             <Button
               variant="ghost"
               className="h-8 w-8 p-0 text-slate-500"
-              onClick={() => setSelectedOrder(row.original)}
+              onClick={() => setSelectedOrderId(row.original.id)}
               aria-label="Ver detalle"
             >
               <Eye className="h-4 w-4" />
@@ -333,7 +361,7 @@ export function OrdersPage() {
               <Button
                 variant="ghost"
                 className="h-8 w-8 p-0"
-                onClick={() => setSelectedOrder(null)}
+                onClick={() => setSelectedOrderId(null)}
                 aria-label="Cerrar detalle"
               >
                 <X className="h-4 w-4" />
@@ -374,15 +402,29 @@ export function OrdersPage() {
               <div className="border-t border-[#E2E8F0] pt-4">
                 <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider block">Asignación Logística</span>
                 <div className="space-y-2 mt-2">
-                  <div className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-lg">
-                    <User className="h-4 w-4 text-[#64748B]" />
-                    <span className="font-medium">Conductor:</span>
-                    <span>{selectedOrder.driverName || 'Sin asignar'}</span>
+                  <div className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-lg">
+                    <RouteIcon className="h-4 w-4 text-[#64748B] mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="font-medium">Ruta:</span>
+                      <span> {getRouteLabel(selectedOrder.assignment)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-lg">
-                    <Truck className="h-4 w-4 text-[#64748B]" />
-                    <span className="font-medium">Vehículo:</span>
-                    <span>{selectedOrder.vehiclePlate || 'Sin asignar'}</span>
+                  <div className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-lg">
+                    <User className="h-4 w-4 text-[#64748B] mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="font-medium">Conductor:</span>
+                      <span> {selectedOrder.assignment.driverName ?? 'Sin asignar'}</span>
+                      {getDriverMeta(selectedOrder.assignment) ? (
+                        <span className="block text-xs text-[#64748B]">{getDriverMeta(selectedOrder.assignment)}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded-lg">
+                    <Truck className="h-4 w-4 text-[#64748B] mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="font-medium">Vehículo:</span>
+                      <span> {selectedOrder.assignment.vehiclePlate ?? 'Sin asignar'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -393,6 +435,13 @@ export function OrdersPage() {
             </div>
 
             <div className="pt-4 border-t border-[#E2E8F0] flex flex-col gap-2">
+              <Button
+                className="w-full"
+                variant={selectedOrder.assignment.routeId ? 'secondary' : 'primary'}
+                onClick={openAssignRoute}
+              >
+                {selectedOrder.assignment.routeId ? 'Cambiar Ruta' : 'Asignar Ruta'}
+              </Button>
               {selectedOrder.status === 'RECEIVED' && (
                 <Button
                   className="w-full"
@@ -431,14 +480,55 @@ export function OrdersPage() {
       {selectedOrder && (
         <CompleteOrderDialog
           open={isCompleteOpen}
-          assignedRouteId={selectedOrder.assignedRouteId}
+          assignedRouteId={selectedOrder.assignment.routeId ?? undefined}
           routes={routes}
           isSubmitting={markCompletedMutation.isPending}
           onClose={() => setIsCompleteOpen(false)}
           onSubmit={handleCompleteSubmit}
         />
       )}
+
+      {selectedOrder && (
+        <AssignRouteToOrderDialog
+          open={isAssignRouteOpen}
+          orderId={selectedOrder.id}
+          routes={routes}
+          isSubmitting={addOrderToRouteMutation.isPending}
+          isLoading={routesQuery.isLoading}
+          selectedRouteId={selectedRouteId}
+          onSelectedRouteChange={setSelectedRouteId}
+          onClose={() => setIsAssignRouteOpen(false)}
+          onSubmit={handleAssignRoute}
+        />
+      )}
     </section>
+  );
+}
+
+function getRouteLabel(assignment: OrderAssignment): string {
+  if (!assignment.routeId) return 'Sin asignar';
+  return `${assignment.routeTitle ?? `Ruta #${assignment.routeId}`} (#${assignment.routeId})`;
+}
+
+function getDriverMeta(assignment: OrderAssignment): string | null {
+  const details = [
+    assignment.driverLicenceNumber,
+    assignment.driverEmail && assignment.driverEmail !== assignment.driverName ? assignment.driverEmail : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return details.length > 0 ? details.join(' · ') : null;
+}
+
+function DriverVehicleCell({ assignment }: { assignment: OrderAssignment }) {
+  if (!assignment.routeId) {
+    return <span className="text-[#64748B] italic">Sin asignar</span>;
+  }
+
+  return (
+    <div className="flex flex-col text-xs">
+      <span className="font-medium text-slate-800">Conductor: {assignment.driverName ?? 'Sin asignar'}</span>
+      <span className="text-[#64748B]">Vehículo: {assignment.vehiclePlate ?? 'Sin asignar'}</span>
+    </div>
   );
 }
 

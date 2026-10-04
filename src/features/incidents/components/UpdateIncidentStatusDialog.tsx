@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button, Dialog, Select } from "@/components/ui";
+import { incidentStatusLabels, incidentStatusTransitions } from "../labels";
 import type { IncidentStatus, UpdateIncidentStatusPayload } from "../types";
 
 type UpdateIncidentStatusDialogProps = {
@@ -8,23 +9,6 @@ type UpdateIncidentStatusDialogProps = {
   currentStatus: IncidentStatus;
   onClose: () => void;
   onSubmit: (payload: UpdateIncidentStatusPayload) => void;
-};
-
-const statusLabels: Record<IncidentStatus, string> = {
-  OPEN: "Abierto",
-  IN_PROGRESS: "En Progreso",
-  ESCALATED: "Escalado",
-  RESOLVED: "Resuelto",
-  CLOSED: "Cerrado",
-};
-
-// Transiciones válidas según el backend
-const validTransitions: Record<IncidentStatus, IncidentStatus[]> = {
-  OPEN: ["IN_PROGRESS", "ESCALATED", "CLOSED"],
-  IN_PROGRESS: ["ESCALATED", "RESOLVED", "CLOSED"],
-  ESCALATED: ["IN_PROGRESS", "RESOLVED", "CLOSED"],
-  RESOLVED: ["CLOSED"],
-  CLOSED: [], // Estado final
 };
 
 export function UpdateIncidentStatusDialog({
@@ -47,7 +31,7 @@ export function UpdateIncidentStatusDialog({
     setNewStatus("");
   };
 
-  const availableTransitions = validTransitions[currentStatus];
+  const availableTransitions = incidentStatusTransitions[currentStatus];
 
   return (
     <Dialog open={open} title="Cambiar Estado de Incidencia" onClose={onClose}>
@@ -55,7 +39,9 @@ export function UpdateIncidentStatusDialog({
         <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
           <p className="text-sm text-blue-900">
             Estado actual:{" "}
-            <span className="font-semibold">{statusLabels[currentStatus]}</span>
+            <span className="font-semibold">
+              {incidentStatusLabels[currentStatus]}
+            </span>
           </p>
         </div>
 
@@ -79,7 +65,7 @@ export function UpdateIncidentStatusDialog({
               <option value="">Seleccionar estado...</option>
               {availableTransitions.map((status) => (
                 <option key={status} value={status}>
-                  {statusLabels[status]}
+                  {incidentStatusLabels[status]}
                 </option>
               ))}
             </Select>

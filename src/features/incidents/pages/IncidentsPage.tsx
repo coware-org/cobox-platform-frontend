@@ -1,183 +1,171 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
-} from "@tanstack/react-table";
-import {
-  AlertTriangle,
-  Clock,
-  Eye,
-  Plus,
-  Search,
-  X,
-  User,
-} from "lucide-react";
+} from '@tanstack/react-table';
+import { Eye, Plus, Search } from 'lucide-react';
 import {
   Badge,
   Button,
   Card,
   Input,
+  Select,
   Skeleton,
   useToast,
-} from "@/components/ui";
-import { ApiErrorState } from "@/components/shared";
-import { PageHeader } from "@/components/common";
+} from '@/components/ui';
+import { ApiErrorState } from '@/components/shared';
+import { EmptyState, PageHeader } from '@/components/common';
 import {
-  useIncidents,
-  useIncidentBySourceAlert,
-  useCreateIncident,
-  useUpdateIncidentStatus,
   useAssignResponsible,
-} from "../hooks";
+  useCreateIncident,
+  useIncidentBySourceAlert,
+  useIncidents,
+  useUpdateIncidentStatus,
+} from '../hooks';
 import type {
   AssignResponsiblePayload,
   CreateIncidentPayload,
   Incident,
   IncidentSeverity,
   IncidentStatus,
-} from "../types";
+  UpdateIncidentStatusPayload,
+} from '../types';
 import {
-  IncidentSeverityBadge,
-  UpdateIncidentStatusDialog,
   AssignResponsibleDialog,
   CreateIncidentDialog,
-} from "../components";
+  IncidentDetailPanel,
+  IncidentSeverityBadge,
+  IncidentStatusBadge,
+  UpdateIncidentStatusDialog,
+} from '../components';
+import { incidentStatusLabels } from '../labels';
 
 const columnHelper = createColumnHelper<Incident>();
 
-const statusLabels: Record<IncidentStatus, string> = {
-  OPEN: "Abierto",
-  IN_PROGRESS: "En Progreso",
-  ESCALATED: "Escalado",
-  RESOLVED: "Resuelto",
-  CLOSED: "Cerrado",
-};
-
-const statusClasses: Record<IncidentStatus, string> = {
-  OPEN: "bg-slate-100 text-slate-700 border border-slate-200",
-  IN_PROGRESS: "bg-blue-50 text-[#3B82F6] border border-blue-200",
-  ESCALATED: "bg-orange-50 text-orange-700 border border-orange-200",
-  RESOLVED: "bg-[#DFF6F1] text-[#0F766E] border border-teal-200",
-  CLOSED: "bg-gray-50 text-gray-700 border border-gray-200",
-};
+const severityOptions: IncidentSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const statusOptions: IncidentStatus[] = [
+  'OPEN',
+  'IN_PROGRESS',
+  'ESCALATED',
+  'RESOLVED',
+  'CLOSED',
+];
 
 export function IncidentsPage() {
   const [searchParams] = useSearchParams();
-  const sourceAlertId = searchParams.get("sourceAlertId");
-  const navigate = useNavigate();
-  const sourceIncidentQuery = useIncidentBySourceAlert(
-    sourceAlertId ?? undefined,
-  );
+  const sourceAlertId = searchParams.get('sourceAlertId');
 
-  const [search, setSearch] = useState("");
-  const [severityFilter, setSeverityFilter] = useState<
-    "all" | IncidentSeverity
-  >("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | IncidentStatus>(
-    "all",
-  );
+  const [search, setSearch] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<'all' | IncidentSeverity>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | IncidentStatus>('all');
 
-  // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(
-    null,
-  );
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
   const { toast } = useToast();
   const incidentsQuery = useIncidents();
+  const sourceIncidentQuery = useIncidentBySourceAlert(sourceAlertId);
 
   const createIncidentMutation = useCreateIncident();
   const updateStatusMutation = useUpdateIncidentStatus();
   const assignMutation = useAssignResponsible();
 
-  const incidents = useMemo(
-    () => incidentsQuery.data ?? [],
-    [incidentsQuery.data],
-  );
+  const incidents = useMemo(() => incidentsQuery.data ?? [], [incidentsQuery.data]);
 
-  // Filtrar incidentes
   const filteredIncidents = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return incidents.filter((inc) => {
+    return incidents.filter((incident) => {
       const matchesSearch =
-        inc.incidentId.toLowerCase().includes(term) ||
-        inc.type.toLowerCase().includes(term) ||
-        inc.description.toLowerCase().includes(term);
+        incident.incidentId.toLowerCase().includes(term) ||
+        incident.type.toLowerCase().includes(term) ||
+        incident.description.toLowerCase().includes(term);
       const matchesSeverity =
-        severityFilter === "all" || inc.severity === severityFilter;
-      const matchesStatus =
-        statusFilter === "all" || inc.status === statusFilter;
+        severityFilter === 'all' || incident.severity === severityFilter;
+      const matchesStatus = statusFilter === 'all' || incident.status === statusFilter;
       return matchesSearch && matchesSeverity && matchesStatus;
     });
   }, [incidents, search, severityFilter, statusFilter]);
 
-  const activeSelectedIncident = useMemo(() => {
+  const activeIncident = useMemo(() => {
     if (!selectedIncident) return null;
     return (
-      incidents.find((i) => i.incidentId === selectedIncident.incidentId) ||
-      null
+      incidents.find((incident) => incident.incidentId === selectedIncident.incidentId) ??
+      selectedIncident
     );
   }, [incidents, selectedIncident]);
 
-  useEffect(() => {
-    if (selectedIncident) return;
-    const source = sourceIncidentQuery.data;
-    if (!source || !source.incidentId) return;
-    const match = incidents.find((i) => i.incidentId === source.incidentId);
-    if (match) setSelectedIncident(match);
-  }, [sourceIncidentQuery.data, incidents, selectedIncident]);
+  // Navegacion contextual: /incidents?sourceAlertId=... abre el incidente
+  // originado por esa alerta de SmartVision. Se dispara una sola vez por
+  // alerta para que cerrar el detalle no lo vuelva a abrir.
+  const autoOpenedSourceRef = useRef<string | null>(null);
 
-  // Contadores por severidad
+  useEffect(() => {
+    if (!sourceAlertId || selectedIncident) return;
+    if (autoOpenedSourceRef.current === sourceAlertId) return;
+
+    const source = sourceIncidentQuery.data;
+    if (!source?.incidentId) return;
+
+    const match = incidents.find(
+      (incident) => incident.incidentId === source.incidentId,
+    );
+    if (!match) return;
+
+    autoOpenedSourceRef.current = sourceAlertId;
+    setSelectedIncident(match);
+  }, [sourceAlertId, sourceIncidentQuery.data, incidents, selectedIncident]);
+
   const severityMetrics = useMemo(() => {
     const active = incidents.filter(
-      (i) => i.status !== "CLOSED" && i.status !== "RESOLVED",
+      (incident) => incident.status !== 'CLOSED' && incident.status !== 'RESOLVED',
     );
     return {
-      critical: active.filter((i) => i.severity === "CRITICAL").length,
-      high: active.filter((i) => i.severity === "HIGH").length,
-      medium: active.filter((i) => i.severity === "MEDIUM").length,
-      low: active.filter((i) => i.severity === "LOW").length,
+      critical: active.filter((incident) => incident.severity === 'CRITICAL').length,
+      high: active.filter((incident) => incident.severity === 'HIGH').length,
+      medium: active.filter((incident) => incident.severity === 'MEDIUM').length,
+      low: active.filter((incident) => incident.severity === 'LOW').length,
       totalActive: active.length,
     };
   }, [incidents]);
+
+  const hasFilters =
+    search.trim() !== '' || severityFilter !== 'all' || statusFilter !== 'all';
 
   const handleCreateSubmit = (payload: CreateIncidentPayload) => {
     createIncidentMutation.mutate(payload, {
       onSuccess: () => {
         setIsCreateOpen(false);
-        toast({ title: "Incidencia reportada correctamente", type: "success" });
+        toast({ title: 'Incidencia reportada correctamente', type: 'success' });
       },
-      onError: (err: unknown) => {
+      onError: (error: unknown) => {
         toast({
-          title: (err as { message?: string }).message || "Error al reportar incidencia",
-          type: "error",
+          title:
+            (error as { message?: string }).message || 'Error al reportar incidencia',
+          type: 'error',
         });
       },
     });
   };
 
-  const handleStatusSubmit = () => {
-    if (!selectedIncident) return;
+  const handleStatusSubmit = (payload: UpdateIncidentStatusPayload) => {
+    if (!activeIncident) return;
     updateStatusMutation.mutate(
-      {
-        incidentId: selectedIncident.incidentId,
-        payload: { status: "IN_PROGRESS" },
-      },
+      { incidentId: activeIncident.incidentId, payload },
       {
         onSuccess: (updated) => {
           setSelectedIncident(updated);
           setIsStatusOpen(false);
-          toast({ title: "Estado actualizado correctamente", type: "success" });
+          toast({ title: 'Estado actualizado correctamente', type: 'success' });
         },
-        onError: (err: unknown) => {
+        onError: (error: unknown) => {
           toast({
-            title: (err as { message?: string }).message || "Error al cambiar estado",
-            type: "error",
+            title: (error as { message?: string }).message || 'Error al cambiar estado',
+            type: 'error',
           });
         },
       },
@@ -185,72 +173,82 @@ export function IncidentsPage() {
   };
 
   const handleAssignSubmit = (payload: AssignResponsiblePayload) => {
-    if (!selectedIncident) return;
+    if (!activeIncident) return;
     assignMutation.mutate(
-      { incidentId: selectedIncident.incidentId, payload },
+      { incidentId: activeIncident.incidentId, payload },
       {
         onSuccess: (updated) => {
           setSelectedIncident(updated);
           setIsAssignOpen(false);
-          toast({
-            title: "Responsable asignado correctamente",
-            type: "success",
-          });
+          toast({ title: 'Responsable asignado correctamente', type: 'success' });
         },
-        onError: (err: unknown) => {
+        onError: (error: unknown) => {
           toast({
-            title: (err as { message?: string }).message || "Error al asignar responsable",
-            type: "error",
+            title:
+              (error as { message?: string }).message ||
+              'Error al asignar responsable',
+            type: 'error',
           });
         },
       },
     );
   };
 
-  // Tabla
   const columns = [
-    columnHelper.accessor("incidentId", {
-      header: "ID",
+    columnHelper.accessor('incidentId', {
+      header: 'ID',
       cell: (info) => (
-        <span className="font-mono text-xs">
-          {info.getValue().slice(0, 8)}...
-        </span>
+        <span className="font-mono text-xs">{info.getValue().slice(0, 8)}...</span>
       ),
     }),
-    columnHelper.accessor("type", {
-      header: "Tipo",
-      cell: (info) => <span className="text-sm">{info.getValue()}</span>,
+    columnHelper.accessor('type', {
+      header: 'Tipo',
+      cell: (info) => (
+        <span className="block max-w-xs truncate text-sm">{info.getValue()}</span>
+      ),
     }),
-    columnHelper.accessor("severity", {
-      header: "Severidad",
+    columnHelper.accessor('severity', {
+      header: 'Severidad',
       cell: (info) => <IncidentSeverityBadge severity={info.getValue()} />,
     }),
-    columnHelper.accessor("status", {
-      header: "Estado",
-      cell: (info) => (
-        <Badge className={statusClasses[info.getValue()]}>
-          {statusLabels[info.getValue()]}
-        </Badge>
-      ),
+    columnHelper.accessor('status', {
+      header: 'Estado',
+      cell: (info) => <IncidentStatusBadge status={info.getValue()} />,
     }),
-    columnHelper.accessor("responsibleUserId", {
-      header: "Responsable",
+    columnHelper.accessor('sourceType', {
+      header: 'Origen',
+      cell: (info) => {
+        const source = info.getValue();
+        if (source === 'AI_ALERT') {
+          return (
+            <Badge className="border border-purple-200 bg-purple-50 text-purple-700">
+              IA
+            </Badge>
+          );
+        }
+        return <span className="text-sm text-gray-500">Manual</span>;
+      },
+    }),
+    columnHelper.accessor('responsibleUserId', {
+      header: 'Responsable',
       cell: (info) => (
         <span className="text-sm text-gray-600">
-          {info.getValue() ? `Usuario #${info.getValue()}` : "-"}
+          {info.getValue() ? `Usuario #${info.getValue()}` : '-'}
         </span>
       ),
     }),
     columnHelper.display({
-      id: "actions",
-      header: "",
+      id: 'actions',
+      header: '',
       cell: (info) => (
         <button
+          type="button"
           onClick={() => setSelectedIncident(info.row.original)}
-          className="text-blue-600 hover:text-blue-900 p-1"
+          className="rounded-md p-1 text-blue-600 hover:bg-blue-900"
           title="Ver detalles"
+          aria-label={`Ver detalle del incidente ${info.row.original.incidentId}`}
         >
-          <Eye className="w-4 h-4" />
+          <Eye className="h-4 w-4" />
         </button>
       ),
     }),
@@ -276,62 +274,60 @@ export function IncidentsPage() {
     <div className="min-h-screen bg-slate-50">
       <PageHeader
         title="Gestión de Incidencias"
-        description="Monitorea y gestiona las incidencias operativas"
+        description="Monitorea y gestiona las incidencias operativas, incluidas las originadas por IA"
       />
 
-      <div className="px-4 md:px-8 py-6 space-y-6">
-        {/* Métricas */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="space-y-6 px-4 py-6 md:px-8">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           <Card className="p-4">
-            <p className="text-xs text-gray-600 font-medium">Total Activo</p>
+            <p className="text-xs font-medium text-gray-600">Total Activo</p>
             <p className="text-2xl font-bold text-gray-900">
               {severityMetrics.totalActive}
             </p>
           </Card>
-          <Card className="p-4 border-l-4 border-l-purple-500">
-            <p className="text-xs text-gray-600 font-medium">Crítico</p>
+          <Card className="border-l-4 border-l-purple-500 p-4">
+            <p className="text-xs font-medium text-gray-600">Crítico</p>
             <p className="text-2xl font-bold text-purple-700">
               {severityMetrics.critical}
             </p>
           </Card>
-          <Card className="p-4 border-l-4 border-l-red-500">
-            <p className="text-xs text-gray-600 font-medium">Alto</p>
+          <Card className="border-l-4 border-l-red-500 p-4">
+            <p className="text-xs font-medium text-gray-600">Alto</p>
             <p className="text-2xl font-bold text-red-700">
               {severityMetrics.high}
             </p>
           </Card>
-          <Card className="p-4 border-l-4 border-l-amber-500">
-            <p className="text-xs text-gray-600 font-medium">Medio</p>
+          <Card className="border-l-4 border-l-amber-500 p-4">
+            <p className="text-xs font-medium text-gray-600">Medio</p>
             <p className="text-2xl font-bold text-amber-700">
               {severityMetrics.medium}
             </p>
           </Card>
-          <Card className="p-4 border-l-4 border-l-slate-500">
-            <p className="text-xs text-gray-600 font-medium">Bajo</p>
+          <Card className="border-l-4 border-l-slate-500 p-4">
+            <p className="text-xs font-medium text-gray-600">Bajo</p>
             <p className="text-2xl font-bold text-slate-700">
               {severityMetrics.low}
             </p>
           </Card>
         </div>
 
-        {/* Filtros y acciones */}
         <Card className="p-4">
-          <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex flex-col items-end gap-4 md:flex-row">
             <div className="flex-1">
               <label
-                htmlFor="search"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="incident-search"
+                className="mb-2 block text-sm font-medium text-gray-700"
               >
                 Buscar
               </label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  id="search"
+                  id="incident-search"
                   type="text"
                   placeholder="Buscar por tipo, descripción o ID..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(event) => setSearch(event.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -339,266 +335,136 @@ export function IncidentsPage() {
 
             <div className="w-full md:w-48">
               <label
-                htmlFor="severity-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="incident-severity-filter"
+                className="mb-2 block text-sm font-medium text-gray-700"
               >
                 Severidad
               </label>
-              <select
-                id="severity-filter"
+              <Select
+                id="incident-severity-filter"
                 value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value as "all" | IncidentSeverity)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(event) =>
+                  setSeverityFilter(event.target.value as 'all' | IncidentSeverity)
+                }
               >
                 <option value="all">Todas</option>
-                <option value="LOW">Baja</option>
-                <option value="MEDIUM">Media</option>
-                <option value="HIGH">Alta</option>
-                <option value="CRITICAL">Crítica</option>
-              </select>
+                {severityOptions.map((severity) => (
+                  <option key={severity} value={severity}>
+                    {severity === 'LOW'
+                      ? 'Baja'
+                      : severity === 'MEDIUM'
+                        ? 'Media'
+                        : severity === 'HIGH'
+                          ? 'Alta'
+                          : 'Crítica'}
+                  </option>
+                ))}
+              </Select>
             </div>
 
             <div className="w-full md:w-48">
               <label
-                htmlFor="status-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="incident-status-filter"
+                className="mb-2 block text-sm font-medium text-gray-700"
               >
                 Estado
               </label>
-              <select
-                id="status-filter"
+              <Select
+                id="incident-status-filter"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as "all" | IncidentStatus)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as 'all' | IncidentStatus)
+                }
               >
                 <option value="all">Todos</option>
-                <option value="OPEN">Abierto</option>
-                <option value="IN_PROGRESS">En Progreso</option>
-                <option value="ESCALATED">Escalado</option>
-                <option value="RESOLVED">Resuelto</option>
-                <option value="CLOSED">Cerrado</option>
-              </select>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {incidentStatusLabels[status]}
+                  </option>
+                ))}
+              </Select>
             </div>
 
-            <Button
-              onClick={() => setIsCreateOpen(true)}
-              className="w-full md:w-auto"
-            >
-              <Plus className="w-4 h-4 mr-2" />
+            <Button onClick={() => setIsCreateOpen(true)} className="w-full md:w-auto">
+              <Plus className="h-4 w-4" />
               Reportar Incidencia
             </Button>
           </div>
         </Card>
 
-        {/* Tabla */}
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-gray-200">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-6 py-3 text-left font-semibold text-gray-700"
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {incidentsQuery.isLoading ? (
-                  <tr>
-                    <td colSpan={columns.length} className="px-6 py-4">
-                      <Skeleton className="h-8 w-full" />
-                    </td>
-                  </tr>
-                ) : filteredIncidents.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      className="px-6 py-8 text-center"
+        {incidentsQuery.isLoading ? (
+          <Card className="overflow-hidden">
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          </Card>
+        ) : filteredIncidents.length === 0 ? (
+          <EmptyState
+            title="No hay incidencias para mostrar"
+            description={
+              hasFilters
+                ? 'Ninguna incidencia coincide con los filtros aplicados.'
+                : 'Todavía no se han reportado incidencias.'
+            }
+          />
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-gray-200">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <th
+                          key={header.id}
+                          className="px-6 py-3 text-left font-semibold text-gray-700"
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {table.getRowModel().rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() => setSelectedIncident(row.original)}
+                      className="cursor-pointer hover:bg-slate-50"
                     >
-                      <AlertTriangle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-600">
-                        No hay incidencias para mostrar
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50">
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id} className="px-6 py-4">
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
                       ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
 
-      {/* Detalle lateral */}
-      {activeSelectedIncident && (
-        <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-white shadow-lg z-40 overflow-y-auto">
-          <div className="p-4 border-b flex justify-between items-center">
-            <h3 className="font-semibold text-lg">Detalles de Incidencia</h3>
-            <button
-              onClick={() => setSelectedIncident(null)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+      {activeIncident ? (
+        <IncidentDetailPanel
+          incident={activeIncident}
+          isUpdating={
+            updateStatusMutation.isPending || assignMutation.isPending
+          }
+          onClose={() => setSelectedIncident(null)}
+          onChangeStatus={() => setIsStatusOpen(true)}
+          onAssignResponsible={() => setIsAssignOpen(true)}
+        />
+      ) : null}
 
-          <div className="p-6 space-y-6">
-            <div>
-              <p className="text-xs text-gray-500 font-medium">
-                ID del Incidente
-              </p>
-              <p className="text-sm font-mono text-gray-900 mt-1">
-                {activeSelectedIncident.incidentId}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Tipo</p>
-              <p className="text-sm text-gray-900 mt-1">
-                {activeSelectedIncident.type}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Severidad</p>
-              <div className="mt-2">
-                <IncidentSeverityBadge
-                  severity={activeSelectedIncident.severity}
-                />
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Estado</p>
-              <div className="mt-2">
-                <Badge className={statusClasses[activeSelectedIncident.status]}>
-                  {statusLabels[activeSelectedIncident.status]}
-                </Badge>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Descripción</p>
-              <p className="text-sm text-gray-900 mt-1">
-                {activeSelectedIncident.description}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Reportado</p>
-              <p className="text-sm text-gray-900 mt-1">
-                {new Date(activeSelectedIncident.reportedAt).toLocaleString()}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 font-medium">
-                Usuario Responsable
-              </p>
-              <p className="text-sm text-gray-900 mt-1">
-                {activeSelectedIncident.responsibleUserId
-                  ? `Usuario #${activeSelectedIncident.responsibleUserId}`
-                  : "Sin asignar"}
-              </p>
-            </div>
-
-            {activeSelectedIncident.sourceType ||
-            activeSelectedIncident.sourceAlertId ||
-            activeSelectedIncident.sourceClientEvidenceId ? (
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Origen</p>
-                <div className="mt-2 space-y-3">
-                  {activeSelectedIncident.sourceType ? (
-                    <Badge className="bg-slate-100 text-slate-700 border border-slate-200">
-                      {activeSelectedIncident.sourceType === "AI_ALERT"
-                        ? "Alerta IA"
-                        : "Manual"}
-                    </Badge>
-                  ) : null}
-
-                  {activeSelectedIncident.sourceAlertId ? (
-                    <div className="space-y-1">
-                      <p className="text-xs text-gray-500">Alerta origen</p>
-                      <p className="text-sm font-mono text-gray-900">
-                        {activeSelectedIncident.sourceAlertId.slice(0, 8)}...
-                      </p>
-                      <Button
-                        variant="secondary"
-                        className="w-full"
-                        onClick={() =>
-                          navigate(
-                            "/alerts?alertId=" +
-                              activeSelectedIncident.sourceAlertId,
-                          )
-                        }
-                      >
-                        Ver alerta
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {activeSelectedIncident.sourceClientEvidenceId ? (
-                    <div className="space-y-1">
-                      <p className="text-xs text-gray-500">Evidencia</p>
-                      <p className="text-sm font-mono text-gray-900">
-                        {activeSelectedIncident.sourceClientEvidenceId.slice(
-                          0,
-                          8,
-                        )}
-                        ...
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="pt-4 border-t space-y-2">
-              <Button
-                onClick={() => setIsStatusOpen(true)}
-                className="w-full"
-                variant="secondary"
-              >
-                <Clock className="w-4 h-4 mr-2" />
-                Cambiar Estado
-              </Button>
-              <Button
-                onClick={() => setIsAssignOpen(true)}
-                className="w-full"
-                variant="secondary"
-              >
-                <User className="w-4 h-4 mr-2" />
-                Asignar Responsable
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Diálogos */}
       <CreateIncidentDialog
         open={isCreateOpen}
         isSubmitting={createIncidentMutation.isPending}
@@ -606,12 +472,12 @@ export function IncidentsPage() {
         onSubmit={handleCreateSubmit}
       />
 
-      {activeSelectedIncident && (
+      {activeIncident ? (
         <>
           <UpdateIncidentStatusDialog
             open={isStatusOpen}
             isSubmitting={updateStatusMutation.isPending}
-            currentStatus={activeSelectedIncident.status}
+            currentStatus={activeIncident.status}
             onClose={() => setIsStatusOpen(false)}
             onSubmit={handleStatusSubmit}
           />
@@ -619,12 +485,12 @@ export function IncidentsPage() {
           <AssignResponsibleDialog
             open={isAssignOpen}
             isSubmitting={assignMutation.isPending}
-            currentResponsibleId={activeSelectedIncident.responsibleUserId}
+            currentResponsibleId={activeIncident.responsibleUserId}
             onClose={() => setIsAssignOpen(false)}
             onSubmit={handleAssignSubmit}
           />
         </>
-      )}
+      ) : null}
     </div>
   );
 }
