@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   BarChart3,
-  Bell,
   BrainCircuit,
   ScanSearch,
   LayoutDashboard,
@@ -16,8 +15,7 @@ import {
 export const sidebarItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'SmartVision IA', path: '/smartvision', icon: BrainCircuit },
-  { label: 'Alertas IA', path: '/alerts', icon: Bell },
-  { label: 'Análisis de Evidencia', path: '/evidence-analyses', icon: ScanSearch },
+  { label: 'Historial de Análisis', path: '/evidence-analyses', icon: ScanSearch },
   { label: 'Vehículos', path: '/vehicles', icon: Truck },
   { label: 'Conductores', path: '/drivers', icon: Users },
   { label: 'Órdenes', path: '/orders', icon: Package },

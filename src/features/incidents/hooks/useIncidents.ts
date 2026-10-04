@@ -1,18 +1,25 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { incidentsService } from "../services/incidentsService";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { incidentsService } from '../services/incidentsService';
 import type {
   Incident,
   CreateIncidentPayload,
   UpdateIncidentStatusPayload,
   AssignResponsiblePayload,
-} from "../types";
+} from '../types';
+
+export const incidentsKeys = {
+  all: ['incidents'] as const,
+  detail: (incidentId: string) => ['incidents', 'detail', incidentId] as const,
+  bySourceAlert: (alertId: string) =>
+    ['incidents', 'source', 'ai-alert', alertId] as const,
+};
 
 /**
  * Hook para obtener todas las incidencias
  */
 export function useIncidents() {
   return useQuery({
-    queryKey: ["incidents"],
+    queryKey: incidentsKeys.all,
     queryFn: () => incidentsService.getIncidents(),
   });
 }
@@ -22,15 +29,19 @@ export function useIncidents() {
  */
 export function useIncidentById(incidentId: string | undefined) {
   return useQuery({
-    queryKey: ["incidents", incidentId],
-    queryFn: () => incidentsService.getIncidentById(incidentId!),
-    enabled: !!incidentId,
+    queryKey: incidentsKeys.detail(incidentId ?? 'none'),
+    queryFn: () => incidentsService.getIncidentById(incidentId as string),
+    enabled: Boolean(incidentId),
   });
 }
 
-export function useIncidentBySourceAlert(alertId?: string) {
+/**
+ * Incidente originado por una alerta de IA. Devuelve `null` cuando el
+ * backend responde 404 (aun no existe incidente para esa alerta).
+ */
+export function useIncidentBySourceAlert(alertId?: string | null) {
   return useQuery({
-    queryKey: ["incidents", "source", "ai-alert", alertId ?? "none"],
+    queryKey: incidentsKeys.bySourceAlert(alertId ?? 'none'),
     queryFn: () => incidentsService.getBySourceAiAlert(alertId as string),
     enabled: Boolean(alertId),
   });
@@ -45,8 +56,8 @@ export function useCreateIncident() {
   return useMutation({
     mutationFn: (payload: CreateIncidentPayload) =>
       incidentsService.createIncident(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: incidentsKeys.all });
     },
   });
 }
@@ -65,14 +76,24 @@ export function useUpdateIncidentStatus() {
       incidentId: string;
       payload: UpdateIncidentStatusPayload;
     }) => incidentsService.updateStatus(incidentId, payload),
-    onSuccess: (updated) => {
-      // Actualización optimista
-      queryClient.setQueryData<Incident[]>(["incidents"], (current) =>
+    onSuccess: async (updated) => {
+      // Actualizacion optimista del listado y del detalle en cache.
+      queryClient.setQueryData<Incident[]>(incidentsKeys.all, (current) =>
         (current ?? []).map((incident) =>
           incident.incidentId === updated.incidentId ? updated : incident,
         ),
       );
-      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.setQueryData(
+        incidentsKeys.detail(updated.incidentId),
+        updated,
+      );
+      if (updated.sourceAlertId) {
+        queryClient.setQueryData(
+          incidentsKeys.bySourceAlert(updated.sourceAlertId),
+          updated,
+        );
+      }
+      await queryClient.invalidateQueries({ queryKey: incidentsKeys.all });
     },
   });
 }
@@ -91,14 +112,17 @@ export function useAssignResponsible() {
       incidentId: string;
       payload: AssignResponsiblePayload;
     }) => incidentsService.assignResponsible(incidentId, payload),
-    onSuccess: (updated) => {
-      // Actualización optimista
-      queryClient.setQueryData<Incident[]>(["incidents"], (current) =>
+    onSuccess: async (updated) => {
+      queryClient.setQueryData<Incident[]>(incidentsKeys.all, (current) =>
         (current ?? []).map((incident) =>
           incident.incidentId === updated.incidentId ? updated : incident,
         ),
       );
-      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.setQueryData(
+        incidentsKeys.detail(updated.incidentId),
+        updated,
+      );
+      await queryClient.invalidateQueries({ queryKey: incidentsKeys.all });
     },
   });
 }

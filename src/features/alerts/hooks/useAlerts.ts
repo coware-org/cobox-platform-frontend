@@ -1,38 +1,88 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { incidentsKeys } from '@/features/incidents/hooks';
 import { alertsService } from '../services/alertsService';
-import type { AlertStatus, ResolveAlertPayload } from '../types';
+import type {
+  Alert,
+  AlertDetail,
+  AlertStatus,
+  AlertsSummary,
+  ResolveAlertPayload,
+} from '../types';
 
+export const alertsKeys = {
+  all: ['alerts'] as const,
+  list: (status?: AlertStatus) => ['alerts', status ?? 'all'] as const,
+  detail: (alertId: string) => ['alerts', 'detail', alertId] as const,
+};
+
+/**
+ * Bandeja de alertas de SmartVision. Es la unica fuente de listado de alertas
+ * del frontend: la usan tanto el inbox de SmartVision IA como sus KPIs.
+ */
 export function useAlerts(status?: AlertStatus) {
   return useQuery({
-    queryKey: ['alerts', status ?? 'all'],
+    queryKey: alertsKeys.list(status),
     queryFn: () => alertsService.getAlerts(status),
   });
 }
 
-export function useAlertDetail(alertId?: string) {
+/**
+ * Detalle de la alerta (ai-validation): evidencia, analisis, resolucion e
+ * incidente vinculado. Se carga solo al abrir el detalle integrado.
+ */
+export function useAlertDetail(alertId?: string | null) {
   return useQuery({
-    queryKey: ['alerts', 'detail', alertId],
+    queryKey: alertsKeys.detail(alertId ?? 'none'),
     queryFn: () => alertsService.getAlertDetail(alertId as string),
     enabled: Boolean(alertId),
   });
 }
 
-export function useAcknowledgeAlert() {
+/**
+ * Refresca la alerta en la vista detalle y en la bandeja, y despues invalida
+ * todas las claves de alertas (listados filtrados + detalle).
+ */
+function useAlertMutationCache() {
   const queryClient = useQueryClient();
+
+  return async (alertId: string, updated?: Alert) => {
+    if (updated) {
+      const detailKey = alertsKeys.detail(alertId);
+      const currentDetail = queryClient.getQueryData<AlertDetail>(detailKey);
+      if (currentDetail) {
+        queryClient.setQueryData<AlertDetail>(detailKey, {
+          ...currentDetail,
+          ...updated,
+        });
+      }
+
+      queryClient.setQueryData<AlertsSummary>(alertsKeys.list(undefined), (prev) =>
+        prev
+          ? {
+              ...prev,
+              alerts: prev.alerts.map((alert) =>
+                alert.alertId === alertId ? { ...alert, ...updated } : alert,
+              ),
+            }
+          : prev,
+      );
+    }
+
+    await queryClient.invalidateQueries({ queryKey: alertsKeys.all });
+  };
+}
+
+export function useAcknowledgeAlert() {
+  const refreshAlert = useAlertMutationCache();
 
   return useMutation({
     mutationFn: (alertId: string) => alertsService.acknowledgeAlert(alertId),
-    onSuccess: (_data, alertId) => {
-      void queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      void queryClient.invalidateQueries({
-        queryKey: ['alerts', 'detail', alertId],
-      });
-    },
+    onSuccess: (updated, alertId) => refreshAlert(alertId, updated),
   });
 }
 
 export function useResolveAlert() {
-  const queryClient = useQueryClient();
+  const refreshAlert = useAlertMutationCache();
 
   return useMutation({
     mutationFn: ({
@@ -42,24 +92,25 @@ export function useResolveAlert() {
       alertId: string;
       payload: ResolveAlertPayload;
     }) => alertsService.resolveAlert(alertId, payload),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      void queryClient.invalidateQueries({
-        queryKey: ['alerts', 'detail', variables.alertId],
-      });
-    },
+    onSuccess: (updated, variables) =>
+      refreshAlert(variables.alertId, updated),
   });
 }
 
 export function useCreateIncidentFromAlert() {
   const queryClient = useQueryClient();
+  const refreshAlert = useAlertMutationCache();
 
   return useMutation({
-    mutationFn: (alertId: string) => alertsService.createIncidentFromAlert(alertId),
-    onSuccess: (_data, alertId) => {
-      void queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      void queryClient.invalidateQueries({
-        queryKey: ['alerts', 'detail', alertId],
+    mutationFn: (alertId: string) =>
+      alertsService.createIncidentFromAlert(alertId),
+    onSuccess: async (_result, alertId) => {
+      // Crear el incidente modifica la alerta (linkedIncidentId) y agrega un
+      // registro en la bandeja de incidentes.
+      await refreshAlert(alertId);
+      await queryClient.invalidateQueries({ queryKey: incidentsKeys.all });
+      await queryClient.invalidateQueries({
+        queryKey: incidentsKeys.bySourceAlert(alertId),
       });
     },
   });
