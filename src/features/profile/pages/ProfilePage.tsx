@@ -1,164 +1,92 @@
-import { useState } from 'react';
 import { PageHeader } from '@/components/common';
-import { Button, Card, Input, Skeleton, useToast } from '@/components/ui';
-import { useProfile, useUpdateProfile } from '../hooks';
-import type { UserProfile } from '../types';
-
-type ProfileFormProps = {
-  profile: UserProfile;
-  isSubmitting: boolean;
-  onSubmit: (values: {
-    name: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
-    locale: string;
-  }) => Promise<void>;
-};
-
-function ProfileForm({ profile, isSubmitting, onSubmit }: ProfileFormProps) {
-  const [name, setName] = useState(profile.name ?? '');
-  const [firstName, setFirstName] = useState(profile.firstName ?? '');
-  const [lastName, setLastName] = useState(profile.lastName ?? '');
-  const [phone, setPhone] = useState(profile.phone ?? '');
-  const [locale, setLocale] = useState(profile.locale ?? 'es-PE');
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async () => {
-    setError(null);
-    if (!name.trim()) {
-      setError('El nombre es obligatorio.');
-      return;
-    }
-    await onSubmit({
-      name: name.trim(),
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phone: phone.trim(),
-      locale,
-    });
-  };
-
-  return (
-    <Card className="p-5 space-y-4">
-      <div className="space-y-1">
-        <label htmlFor="profile-email" className="block text-sm font-medium text-slate-700">
-          Correo electronico
-        </label>
-        <Input id="profile-email" value={profile.email} disabled />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="profile-name" className="block text-sm font-medium text-slate-700">
-          Nombre
-        </label>
-        <Input id="profile-name" value={name} onChange={(event) => setName(event.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="profile-firstName" className="block text-sm font-medium text-slate-700">
-          Nombre (detalle)
-        </label>
-        <Input id="profile-firstName" value={firstName} onChange={(event) => setFirstName(event.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="profile-lastName" className="block text-sm font-medium text-slate-700">
-          Apellido
-        </label>
-        <Input id="profile-lastName" value={lastName} onChange={(event) => setLastName(event.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="profile-phone" className="block text-sm font-medium text-slate-700">
-          Telefono
-        </label>
-        <Input id="profile-phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="profile-locale" className="block text-sm font-medium text-slate-700">
-          Idioma / Region
-        </label>
-        <Input id="profile-locale" value={locale} onChange={(event) => setLocale(event.target.value)} />
-      </div>
-      {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
-      <div className="flex justify-end pt-4">
-        <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-          {isSubmitting ? 'Guardando...' : 'Guardar'}
-        </Button>
-      </div>
-    </Card>
-  );
-}
+import { Button, Card, Skeleton, useToast } from '@/components/ui';
+import { ProfileAvatar, ProfileForm } from '../components';
+import { useAccountProfile, useUpdateProfile } from '../hooks';
+import { roleLabel } from '../services/profileMappers';
+import type { UpdateProfilePayload } from '../types';
 
 export function ProfilePage() {
   const { toast } = useToast();
-  const profileQuery = useProfile();
+  const profileQuery = useAccountProfile();
   const updateMutation = useUpdateProfile();
-  const profile = profileQuery.data;
+  const profile = profileQuery.account;
 
-  const handleSubmit = async (values: {
-    name: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
-    locale: string;
-  }) => {
+  const handleSubmit = async (payload: UpdateProfilePayload): Promise<boolean> => {
     try {
-      await updateMutation.mutateAsync({
-        name: values.name,
-        firstName: values.firstName || null,
-        lastName: values.lastName || null,
-        phone: values.phone || null,
-        locale: values.locale,
-      });
+      await updateMutation.mutateAsync(payload);
       toast({ title: 'Perfil actualizado', type: 'success' });
-    } catch (err) {
-      const message = (err as { message?: string }).message ?? 'No se pudo actualizar el perfil';
-      toast({ title: message, type: 'error' });
+      return true;
+    } catch {
+      toast({ title: 'No se pudo guardar el perfil. Inténtalo nuevamente.', type: 'error' });
+      return false;
     }
   };
 
   return (
     <>
-      <PageHeader title="Perfil de usuario" description="Datos de usuario y preferencias." />
+      <PageHeader title="Perfil de usuario" description="Datos personales y resumen de tu cuenta." />
       <div className="px-4 md:px-8 py-6 space-y-6">
-        {profileQuery.isError ? (
-          <Card className="p-5">
-            <p className="text-sm text-[#EF4444]">No se pudo cargar el perfil.</p>
-          </Card>
-        ) : null}
-        <div className="grid gap-6 md:grid-cols-2">
-          {profileQuery.isLoading || !profile ? (
-            <Card className="p-5">
-              <Skeleton className="h-40 w-full" />
+        {profileQuery.isLoading ? (
+          <Card className="p-5" aria-label="Cargando perfil"><Skeleton className="h-40 w-full" /></Card>
+        ) : profile ? (
+          <>
+            <Card className="flex items-center gap-4 p-5">
+              <ProfileAvatar key={profile.auth0Subject} name={profile.name} photoUrl={profile.photoUrl} className="h-20 w-20 text-2xl" />
+              <div className="min-w-0">
+                <h2 className="break-words text-xl font-semibold text-slate-950">{profile.name}</h2>
+                <p className="break-all text-sm text-slate-500">{profile.email || 'Correo no disponible'}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {profile.emailVerified === true ? 'Correo verificado' : profile.emailVerified === false ? 'Correo no verificado' : 'Verificación del correo no disponible'}
+                </p>
+              </div>
             </Card>
-          ) : (
-            <ProfileForm
-              key={profile.id}
-              profile={profile}
-              isSubmitting={updateMutation.isPending}
-              onSubmit={handleSubmit}
-            />
-          )}
-          <Card className="p-5 space-y-3">
-            <h2 className="text-sm font-semibold uppercase text-slate-500">Resumen de cuenta</h2>
-            <div>
-              <p className="text-xs font-medium uppercase text-slate-500">Correo</p>
-              <p className="mt-1 text-sm text-slate-950">{profile?.email ?? '-'}</p>
+            {profileQuery.isSuccess && profileQuery.data === null ? (
+              <p className="text-sm text-slate-600">Completa y guarda tus datos para crear tu perfil en CoBox.</p>
+            ) : null}
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                {profileQuery.isError ? (
+                  <Card className="p-5 space-y-3">
+                    <p role="alert" className="text-sm text-[#EF4444]">No se pudo cargar el perfil de CoBox. Inténtalo nuevamente.</p>
+                    <Button type="button" disabled={profileQuery.isFetching} onClick={() => void profileQuery.refetch()}>
+                      {profileQuery.isFetching ? 'Cargando...' : 'Reintentar'}
+                    </Button>
+                  </Card>
+                ) : null}
+                {profileQuery.isError && profileQuery.data === undefined ? null : (
+                  <ProfileForm key={profile.auth0Subject} profile={profile} isSubmitting={updateMutation.isPending} disabled={profileQuery.isError} onSubmit={handleSubmit} />
+                )}
+              </div>
+              <Card className="p-5 space-y-3">
+                <h2 className="text-sm font-semibold uppercase text-slate-500">Resumen de cuenta</h2>
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">Roles en CoBox</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {profile.roles.length ? profile.roles.map((role) => (
+                      <span key={role} className="rounded bg-[#DFF6F1] px-2 py-0.5 text-xs font-medium text-[#0F766E]">{roleLabel(role)}</span>
+                    )) : <p className="text-sm text-slate-500">No disponible</p>}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">ID de CoBox</p>
+                  <p className="mt-1 font-mono text-xs text-slate-900">{profile.id ?? 'No disponible'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">ID de Auth0</p>
+                  <p className="mt-1 break-all font-mono text-xs text-slate-900">{profile.auth0Subject}</p>
+                </div>
+                {profile.active !== null ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase text-slate-500">Estado de la cuenta en CoBox</p>
+                    <p className="mt-1 text-sm text-slate-900">{profile.active ? 'Activa' : 'Inactiva'}</p>
+                  </div>
+                ) : null}
+              </Card>
             </div>
-            <div>
-              <p className="text-xs font-medium uppercase text-slate-500">Rol</p>
-              {profile?.role ? (
-                <span className="mt-1 inline-block rounded bg-[#DFF6F1] px-2 py-0.5 text-xs font-medium text-[#0F766E]">
-                  {profile.role}
-                </span>
-              ) : (
-                <p className="mt-1 text-sm text-slate-500">-</p>
-              )}
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase text-slate-500">ID de usuario</p>
-              <p className="mt-1 font-mono text-xs text-slate-900">{profile?.id ?? '-'}</p>
-            </div>
-          </Card>
-        </div>
+          </>
+        ) : (
+          <Card className="p-5"><p className="text-sm text-slate-500">Inicia sesión para ver tu perfil.</p></Card>
+        )}
       </div>
     </>
   );
