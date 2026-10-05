@@ -1,13 +1,9 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useCoboxRoles } from '@/app/auth';
 import { Topbar } from './Topbar';
 
-type Auth0UserWithRoles = {
-  'https://cobox/roles'?: string[];
-};
-
 export function DriverLayout() {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { roles, isLoading, isAuthenticated } = useCoboxRoles();
 
   if (isLoading) {
     return (
@@ -16,8 +12,6 @@ export function DriverLayout() {
       </div>
     );
   }
-
-  const roles = (user as Auth0UserWithRoles | undefined)?.['https://cobox/roles'] ?? [];
 
   if (!isAuthenticated || !roles.includes('ROLE_DRIVER')) {
     return <Navigate to="/auth/login" replace />;

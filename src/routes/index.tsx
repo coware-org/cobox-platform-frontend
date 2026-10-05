@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
+import { RoleGuard } from '@/app/auth';
 import { AuthLayout, DashboardLayout, DriverLayout } from '@/components/layouts';
-import { LoginPage, RegisterPage } from '@/features/auth';
+import { LoginPage } from '@/features/auth';
 import { DashboardPage } from '@/features/dashboard';
 import { SmartVisionPage } from '@/features/smartvision';
 import { EvidenceAnalysesPage } from '@/features/evidence-analyses';
@@ -50,9 +51,8 @@ export function AppRoutes() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/auth" element={<AuthLayout />}>
         <Route path="login" element={<LoginPage />} />
-        <Route path="register" element={<RegisterPage />} />
       </Route>
-      <Route element={<DashboardLayout />}>
+      <Route element={<RoleGuard require="ROLE_MANAGER"><DashboardLayout /></RoleGuard>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/smartvision" element={<SmartVisionPage />} />
         <Route path="/alerts" element={<AlertsRedirect />} />
