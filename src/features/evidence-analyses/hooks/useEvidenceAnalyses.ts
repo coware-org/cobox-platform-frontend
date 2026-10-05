@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { evidenceAnalysesService } from '../services/evidenceAnalysesService';
 import type { EvidenceAnalysisFilters } from '../types';
+import { isAnalysisPending } from '../services/evidenceMappers';
 
 export const evidenceAnalysesKeys = {
   all: ['evidence-analyses'] as const,
@@ -20,7 +21,8 @@ export const evidenceAnalysesKeys = {
 export function useEvidenceAnalyses(filters: EvidenceAnalysisFilters = {}) {
   return useQuery({
     queryKey: evidenceAnalysesKeys.list(filters),
-    queryFn: () => evidenceAnalysesService.getEvidenceAnalyses(filters),
+    queryFn: ({ signal }) => evidenceAnalysesService.getEvidenceAnalyses(filters, signal),
+    refetchInterval: (query) => !query.state.error && query.state.data?.analyses.some((analysis) => isAnalysisPending(analysis.status)) ? 5000 : false,
   });
 }
 
@@ -31,8 +33,9 @@ export function useEvidenceAnalyses(filters: EvidenceAnalysisFilters = {}) {
 export function useEvidenceAnalysisDetail(evidenceId?: string | null) {
   return useQuery({
     queryKey: evidenceAnalysesKeys.detail(evidenceId ?? 'none'),
-    queryFn: () =>
-      evidenceAnalysesService.getAiEvidenceAnalysis(evidenceId as string),
+    queryFn: ({ signal }) =>
+      evidenceAnalysesService.getAiEvidenceAnalysis(evidenceId as string, signal),
+    refetchInterval: (query) => !query.state.error && isAnalysisPending(query.state.data?.status) ? 5000 : false,
     enabled: Boolean(evidenceId),
     retry: false,
   });

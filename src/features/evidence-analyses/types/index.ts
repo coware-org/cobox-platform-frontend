@@ -1,91 +1,36 @@
 import type { DegradedSection } from '@/types';
 
-/** Estados expuestos por el BFF de escritorio (desktop/smartvision). */
-export type EvidenceAnalysisStatus = 'PENDING' | 'PROCESSED' | 'FLAGGED' | 'REJECTED';
+export const evidenceAnalysisStatuses = [
+  'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVIEW_REQUIRED',
+  'RECAPTURE_REQUIRED', 'FRAUD_SUSPECTED', 'DEGRADED',
+] as const;
 
-/** Estados expuestos por ai-validation para el analisis de una evidencia. */
-export type AiEvidenceAnalysisStatus =
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'REVIEW_REQUIRED'
-  | 'RECAPTURE_REQUIRED'
-  | 'FRAUD_SUSPECTED'
-  | 'DEGRADED';
+export type EvidenceAnalysisStatus = typeof evidenceAnalysisStatuses[number];
+export type AiEvidenceAnalysisStatus = EvidenceAnalysisStatus;
+export type EvidenceAnalysisViewStatus = EvidenceAnalysisStatus;
 
-/**
- * Union de estados posibles de un analisis de evidencia. El detalle
- * compartido acepta cualquiera de los dos origenes y nunca se mezcla con el
- * estado de la alerta ni con el estado del incidente.
- */
-export type EvidenceAnalysisViewStatus =
-  | EvidenceAnalysisStatus
-  | AiEvidenceAnalysisStatus;
-
-export type BackendEvidenceAnalysisResource = {
-  id: number;
-  analysisId: string;
-  status: EvidenceAnalysisStatus;
-  driverId?: number | null;
-  driverName?: string | null;
-  routeId?: number | null;
-  routeTitle?: string | null;
-  vehicleId?: number | null;
-  vehiclePlate?: string | null;
-  orderId?: number | null;
-  orderLabel?: string | null;
-  evidenceUrl?: string | null;
-  thumbnailUrl?: string | null;
-  aiSummary?: string | null;
-  aiConfidence?: number | null;
-  analysisData?: Record<string, unknown> | null;
-  detectedLabels?: string[] | null;
-  createdAt: string;
-  processedAt?: string | null;
-};
-
-/** Respuesta de ai-validation para el analisis de una evidencia puntual. */
+/** Contrato REST de ai-validation, independiente del contexto del BFF. */
 export type AiEvidenceAnalysisResource = {
-  clientEvidenceId?: string | null;
-  analysisId?: string | null;
-  objectKey?: string | null;
-  evidenceType?: string | null;
-  status?: string | null;
-  provider?: string | null;
-  driverId?: number | null;
-  orderId?: number | null;
-  routeId?: number | null;
-  evidenceUrl?: string | null;
-  confidenceScore?: number | null;
-  fraudScore?: number | null;
-  validationSummary?: string | null;
-  failureReason?: string | null;
-  analysisData?: Record<string, unknown> | null;
-  createdAt?: string | null;
-  completedAt?: string | null;
+  clientEvidenceId: string;
+  objectKey: string;
+  driverId: number | null;
+  orderId: number | null;
+  routeId: number | null;
+  evidenceType: string | null;
+  status: string;
+  provider: string | null;
+  confidenceScore: number | null;
+  fraudScore: number | null;
+  validationSummary: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  ocrText?: string | null;
+  detectedLabels?: string[];
 };
 
-export type EvidenceAnalysis = {
-  id: number;
-  analysisId: string;
-  status: EvidenceAnalysisStatus;
-  driverId?: number | null;
-  driverName?: string | null;
-  routeId?: number | null;
-  routeTitle?: string | null;
-  vehicleId?: number | null;
-  vehiclePlate?: string | null;
-  orderId?: number | null;
-  orderLabel?: string | null;
-  evidenceUrl?: string | null;
-  thumbnailUrl?: string | null;
-  aiSummary?: string | null;
-  aiConfidence?: number | null;
-  analysisData?: Record<string, unknown> | null;
-  detectedLabels?: string[] | null;
-  createdAt: string;
-  processedAt?: string | null;
+export type EvidenceAnalysis = EvidenceAnalysisDetailView & {
+  clientEvidenceId: string;
 };
 
 /**
@@ -118,6 +63,8 @@ export type EvidenceAnalysisDetailView = {
   analysisData: Record<string, unknown> | null;
   createdAt: string | null;
   processedAt: string | null;
+  ocrText?: string | null;
+  degradedSections?: DegradedSection[];
 };
 
 export type EvidenceAnalysesSummary = {

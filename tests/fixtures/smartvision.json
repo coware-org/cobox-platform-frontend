@@ -1,0 +1,52 @@
+{
+  "analyses": [
+    {
+      "analysis": {
+        "clientEvidenceId": "123e4567-e89b-42d3-a456-426614174000",
+        "objectKey": "drivers/7/routes/11/orders/19/evidences/123e4567-e89b-42d3-a456-426614174000",
+        "driverId": 7, "routeId": 11, "orderId": 19,
+        "evidenceType": "DELIVERY_PHOTO", "status": "REVIEW_REQUIRED",
+        "provider": "AWS_TEXTRACT_REKOGNITION", "confidenceScore": 70,
+        "fraudScore": 0.2, "validationSummary": "AI result is ambiguous",
+        "failureReason": null, "createdAt": "2026-10-05T15:00:00Z",
+        "completedAt": "2026-10-05T15:00:08Z"
+      },
+      "alerts": [],
+      "driver": { "id": 7, "email": "driver@example.test", "status": "ASSIGNED" },
+      "route": { "id": 11, "title": "Ruta Lima", "vehicleId": 5, "driverId": 7 },
+      "vehicle": { "id": 5, "plateNumber": "ABC-123" },
+      "order": { "id": 19, "city": "Lima" },
+      "degradedSections": []
+    },
+    {
+      "analysis": {
+        "clientEvidenceId": "123e4567-e89b-42d3-a456-426614174001",
+        "objectKey": "evidences/pending", "driverId": 8, "routeId": 12, "orderId": 20,
+        "status": "PROCESSING", "confidenceScore": null, "fraudScore": null,
+        "createdAt": "2026-10-05T15:02:00Z", "completedAt": null
+      },
+      "driver": null, "route": null, "vehicle": null, "order": null,
+      "alerts": [], "degradedSections": [{ "section": "driver", "reason": "Service unavailable" }]
+    }
+  ],
+  "alerts": [
+    {
+      "alert": {
+        "alertId": "123e4567-e89b-42d3-a456-426614174010",
+        "clientEvidenceId": "123e4567-e89b-42d3-a456-426614174000",
+        "status": "OPEN", "severity": "MEDIUM", "type": "EVIDENCE_REVIEW_REQUIRED",
+        "message": "AI result is ambiguous and needs manual review",
+        "createdAt": "2026-10-05T15:00:08Z", "linkedIncidentId": null
+      },
+      "analysis": {
+        "clientEvidenceId": "123e4567-e89b-42d3-a456-426614174000",
+        "driverId": 7, "routeId": 11, "orderId": 19,
+        "confidenceScore": 70, "validationSummary": "AI result is ambiguous"
+      },
+      "driver": { "id": 7, "email": "driver@example.test" },
+      "route": { "id": 11, "title": "Ruta Lima", "vehicleId": 5 },
+      "vehicle": { "id": 5, "plateNumber": "ABC-123" },
+      "order": { "id": 19 }, "degradedSections": []
+    }
+  ]
+}

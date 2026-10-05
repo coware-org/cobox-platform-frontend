@@ -18,5 +18,5 @@ const statusClasses: Record<AlertStatus, string> = {
 };
 
 export function AlertStatusBadge({ status }: AlertStatusBadgeProps) {
-  return <Badge className={statusClasses[status]}>{statusLabels[status]}</Badge>;
+  return <Badge className={statusClasses[status]}>{statusLabels[status] ?? status ?? 'Sin estado'}</Badge>;
 }

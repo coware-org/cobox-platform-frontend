@@ -4,7 +4,7 @@ export type AlertStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export type BackendAlertResource = {
-  id: number;
+  id: number | null;
   alertId: string;
   status: AlertStatus;
   severity: AlertSeverity;
@@ -40,7 +40,9 @@ export type BackendAlertDetailResource = BackendAlertResource & {
 };
 
 export type Alert = {
-  id: number;
+  evidenceId: string | null;
+  degradedSections?: DegradedSection[];
+  id: number | null;
   alertId: string;
   status: AlertStatus;
   severity: AlertSeverity;
