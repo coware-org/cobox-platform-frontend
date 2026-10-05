@@ -1,6 +1,12 @@
-import { Bell, Search, Settings, User } from 'lucide-react';
+import { Bell, Search, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Skeleton } from '@/components/ui';
+import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
+import { useAccountProfile } from '@/features/profile/hooks/useProfile';
+import { roleLabel } from '@/features/profile/services/profileMappers';
 
 export function Topbar() {
+  const { account: profile, isLoading } = useAccountProfile();
   return (
     <header className="flex h-16 items-center justify-between border-b border-[#E2E8F0] bg-white px-6">
       <div className="relative w-full max-w-xl">
@@ -20,15 +26,17 @@ export function Topbar() {
           <Settings className="h-5 w-5" />
         </button>
         <div className="h-8 w-px bg-[#E2E8F0]" />
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-sm font-bold leading-5 text-slate-950">Admin Usuario</p>
-            <p className="text-xs text-[#64748B]">Administrador</p>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0F766E] text-white">
-            <User className="h-5 w-5" />
-          </div>
-        </div>
+        {isLoading ? (
+          <div role="status" aria-label="Cargando cuenta"><Skeleton className="h-9 w-32" /></div>
+        ) : profile ? (
+          <Link to="/profile" aria-label="Ver mi perfil" className="flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-[#0F766E]">
+            <div className="hidden max-w-48 text-right sm:block">
+              <p className="truncate text-sm font-bold leading-5 text-slate-950">{profile.name}</p>
+              {profile.roles.length ? <p className="text-xs text-[#64748B]">{profile.roles.map(roleLabel).join(', ')}</p> : null}
+            </div>
+            <ProfileAvatar key={profile.auth0Subject} name={profile.name} photoUrl={profile.photoUrl} className="h-9 w-9" />
+          </Link>
+        ) : null}
       </div>
     </header>
   );

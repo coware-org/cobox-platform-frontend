@@ -23,6 +23,7 @@ export function Auth0ProviderWithNavigate({
       clientId={clientId}
       authorizationParams={{
         redirect_uri: window.location.origin,
+        scope: 'openid profile email',
         ...(audience ? { audience } : {}),
       }}
       useRefreshTokens
