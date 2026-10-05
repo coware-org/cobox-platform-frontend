@@ -1,5 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui';
 
 export function LoginForm() {
@@ -51,12 +51,6 @@ export function LoginForm() {
       >
         Registrarse
       </Button>
-      <p className="text-center text-sm text-slate-500">
-        ¿No tienes cuenta?{' '}
-        <Link to="/auth/register" className="font-medium text-[#0F766E] hover:underline">
-          Registrate
-        </Link>
-      </p>
     </div>
   );
 }
