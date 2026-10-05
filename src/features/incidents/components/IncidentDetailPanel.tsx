@@ -163,6 +163,7 @@ export function IncidentDetailPanel({
           description="Mismo componente de detalle que usa SmartVision IA"
         >
           <EvidenceAnalysisDetail
+            evidenceId={evidenceId}
             analysis={analysisQuery.data}
             isLoading={analysisQuery.isLoading}
             error={analysisQuery.error}

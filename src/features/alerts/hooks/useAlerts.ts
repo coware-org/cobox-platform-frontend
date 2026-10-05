@@ -2,10 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { incidentsKeys } from '@/features/incidents/hooks';
 import { alertsService } from '../services/alertsService';
 import type {
-  Alert,
-  AlertDetail,
   AlertStatus,
-  AlertsSummary,
   ResolveAlertPayload,
 } from '../types';
 
@@ -45,29 +42,9 @@ export function useAlertDetail(alertId?: string | null) {
 function useAlertMutationCache() {
   const queryClient = useQueryClient();
 
-  return async (alertId: string, updated?: Alert) => {
-    if (updated) {
-      const detailKey = alertsKeys.detail(alertId);
-      const currentDetail = queryClient.getQueryData<AlertDetail>(detailKey);
-      if (currentDetail) {
-        queryClient.setQueryData<AlertDetail>(detailKey, {
-          ...currentDetail,
-          ...updated,
-        });
-      }
-
-      queryClient.setQueryData<AlertsSummary>(alertsKeys.list(undefined), (prev) =>
-        prev
-          ? {
-              ...prev,
-              alerts: prev.alerts.map((alert) =>
-                alert.alertId === alertId ? { ...alert, ...updated } : alert,
-              ),
-            }
-          : prev,
-      );
-    }
-
+  return async () => {
+    // La respuesta de una mutación es plana: invalidar conserva el contexto del BFF
+    // hasta que llegue el listado actualizado, sin sobrescribirlo con campos null.
     await queryClient.invalidateQueries({ queryKey: alertsKeys.all });
   };
 }
@@ -77,7 +54,7 @@ export function useAcknowledgeAlert() {
 
   return useMutation({
     mutationFn: (alertId: string) => alertsService.acknowledgeAlert(alertId),
-    onSuccess: (updated, alertId) => refreshAlert(alertId, updated),
+    onSuccess: () => refreshAlert(),
   });
 }
 
@@ -92,8 +69,7 @@ export function useResolveAlert() {
       alertId: string;
       payload: ResolveAlertPayload;
     }) => alertsService.resolveAlert(alertId, payload),
-    onSuccess: (updated, variables) =>
-      refreshAlert(variables.alertId, updated),
+    onSuccess: () => refreshAlert(),
   });
 }
 
@@ -107,7 +83,7 @@ export function useCreateIncidentFromAlert() {
     onSuccess: async (_result, alertId) => {
       // Crear el incidente modifica la alerta (linkedIncidentId) y agrega un
       // registro en la bandeja de incidentes.
-      await refreshAlert(alertId);
+      await refreshAlert();
       await queryClient.invalidateQueries({ queryKey: incidentsKeys.all });
       await queryClient.invalidateQueries({
         queryKey: incidentsKeys.bySourceAlert(alertId),

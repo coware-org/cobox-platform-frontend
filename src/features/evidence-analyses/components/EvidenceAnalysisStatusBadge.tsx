@@ -2,12 +2,7 @@ import { Badge } from '@/components/ui';
 import type { EvidenceAnalysisViewStatus } from '../types';
 
 const labelByStatus: Partial<Record<EvidenceAnalysisViewStatus, string>> = {
-  // BFF de escritorio
   PENDING: 'Pendiente',
-  PROCESSED: 'Procesada',
-  FLAGGED: 'Marcada',
-  REJECTED: 'Rechazada',
-  // ai-validation
   PROCESSING: 'Procesando',
   COMPLETED: 'Completada',
   FAILED: 'Fallida',
@@ -20,9 +15,6 @@ const labelByStatus: Partial<Record<EvidenceAnalysisViewStatus, string>> = {
 const classByStatus: Partial<Record<EvidenceAnalysisViewStatus, string>> = {
   PENDING: 'bg-slate-100 text-slate-700 border border-slate-200',
   PROCESSING: 'bg-blue-50 text-blue-700 border border-blue-200',
-  PROCESSED: 'bg-[#DFF6F1] text-[#0F766E] border border-teal-200',
-  FLAGGED: 'bg-amber-50 text-amber-700 border border-amber-200',
-  REJECTED: 'bg-red-50 text-[#EF4444] border border-red-200',
   COMPLETED: 'bg-[#DFF6F1] text-[#0F766E] border border-teal-200',
   FAILED: 'bg-red-50 text-[#EF4444] border border-red-200',
   REVIEW_REQUIRED: 'bg-amber-50 text-amber-700 border border-amber-200',

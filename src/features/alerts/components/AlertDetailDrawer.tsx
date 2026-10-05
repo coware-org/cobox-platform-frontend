@@ -98,7 +98,7 @@ export function AlertDetailDrawer({
   const detailQuery = useAlertDetail(alertId);
   const detail = detailQuery.data;
   const alert = detail ?? fallbackAlert ?? null;
-  const evidenceId = detail?.evidenceId ?? null;
+  const evidenceId = detail?.evidenceId ?? fallbackAlert?.evidenceId ?? null;
 
   const evidenceQuery = useEvidenceAnalysisDetail(evidenceId);
   const incidentQuery = useIncidentBySourceAlert(alertId);
@@ -114,9 +114,15 @@ export function AlertDetailDrawer({
     createIncidentMutation.isPending;
 
   const isAlertMissing = isAxiosError(detailQuery.error) && detailQuery.error.response?.status === 404;
-  const evidenceView =
-    evidenceQuery.data ??
-    (evidenceQuery.isError && detail ? toAlertEvidenceView(detail) : null);
+  const evidenceView = evidenceQuery.data ? {
+    ...evidenceQuery.data,
+    driverName: evidenceQuery.data.driverName ?? alert?.driverName ?? null,
+    routeTitle: evidenceQuery.data.routeTitle ?? alert?.routeTitle ?? null,
+    vehicleId: evidenceQuery.data.vehicleId ?? alert?.vehicleId ?? null,
+    vehiclePlate: evidenceQuery.data.vehiclePlate ?? alert?.vehiclePlate ?? null,
+    orderLabel: evidenceQuery.data.orderLabel ?? alert?.orderLabel ?? null,
+    degradedSections: fallbackAlert?.degradedSections,
+  } : detail ? toAlertEvidenceView(detail) : null;
 
   const goToIncident = () => {
     navigate(`/incidents?sourceAlertId=${encodeURIComponent(alertId)}`);
@@ -335,6 +341,7 @@ export function AlertDetailDrawer({
             </p>
           ) : (
             <EvidenceAnalysisDetail
+              evidenceId={evidenceId}
               analysis={evidenceView}
               isLoading={evidenceQuery.isLoading}
               error={evidenceQuery.error}

@@ -15,7 +15,8 @@ import {
   EmptyState,
   PageHeader,
 } from '@/components/common';
-import { toEvidenceAnalysisView } from '../services';
+import { mergeEvidenceDetail, toEvidenceAnalysisView } from '../services';
+import { evidenceAnalysisStatuses } from '../types';
 import { useEvidenceAnalyses, useEvidenceAnalysisDetail } from '../hooks';
 import type {
   EvidenceAnalysis,
@@ -29,12 +30,7 @@ import {
 
 const columnHelper = createColumnHelper<EvidenceAnalysis>();
 
-const statusOptions: EvidenceAnalysisStatus[] = [
-  'PENDING',
-  'PROCESSED',
-  'FLAGGED',
-  'REJECTED',
-];
+const statusOptions = evidenceAnalysisStatuses;
 
 const toFilterNumber = (value: string): number | undefined => {
   const parsed = Number(value?.trim());
@@ -49,7 +45,6 @@ export function EvidenceAnalysesPage() {
   const [driverIdInput, setDriverIdInput] = useState('');
   const [routeIdInput, setRouteIdInput] = useState('');
   const [orderIdInput, setOrderIdInput] = useState('');
-  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
 
   const filters = useMemo<EvidenceAnalysisFilters>(
     () => ({
@@ -64,29 +59,26 @@ export function EvidenceAnalysesPage() {
   const query = useEvidenceAnalyses(filters);
   const analyses = useMemo(() => query.data?.analyses ?? [], [query.data]);
 
-  const selectedRecord = useMemo(
-    () =>
-      selectedAnalysisId
-        ? (analyses.find(
-            (analysis) => analysis.analysisId === selectedAnalysisId,
-          ) ?? null)
-        : null,
-    [analyses, selectedAnalysisId],
-  );
-
-  /**
-   * Navegacion contextual: /evidence-analyses?evidenceId=...
-   * El historial del BFF no expone el id de evidencia, asi que el deep link
-   * se resuelve con el analisis puntual de ai-validation (mismo componente).
-   */
-  const needsExternalDetail = Boolean(evidenceIdParam) && !selectedRecord;
-  const detailQuery = useEvidenceAnalysisDetail(
-    needsExternalDetail ? evidenceIdParam : null,
-  );
+  const activeEvidenceId = evidenceIdParam;
+  const contextRecord = analyses.find((analysis) => analysis.clientEvidenceId === activeEvidenceId) ?? null;
+  const openDetail = (evidenceId: string) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous);
+    next.set('evidenceId', evidenceId);
+    return next;
+  });
+  const detailQuery = useEvidenceAnalysisDetail(activeEvidenceId);
+  const detailView = mergeEvidenceDetail(contextRecord ? toEvidenceAnalysisView(contextRecord) : null, detailQuery.data);
+  const closeDetail = () => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('evidenceId');
+      return next;
+    });
+  };
 
   const columns = [
-    columnHelper.accessor('analysisId', {
-      header: 'ID',
+    columnHelper.accessor('clientEvidenceId', {
+      header: 'Evidencia',
       cell: (info) => (
         <span className="font-mono text-xs">
           {info.getValue().slice(0, 8)}...
@@ -144,7 +136,7 @@ export function EvidenceAnalysesPage() {
       header: 'Creado',
       cell: (info) => (
         <span className="text-sm text-gray-600">
-          {new Date(info.getValue()).toLocaleString()}
+          {info.getValue() ? new Date(info.getValue() as string).toLocaleString('es-PE') : '-'}
         </span>
       ),
     }),
@@ -154,10 +146,10 @@ export function EvidenceAnalysesPage() {
       cell: (info) => (
         <button
           type="button"
-          onClick={() => setSelectedAnalysisId(info.row.original.analysisId)}
+          onClick={() => openDetail(info.row.original.clientEvidenceId)}
           className="rounded-md p-1 text-blue-600 hover:bg-blue-900"
           title="Ver detalles"
-          aria-label={`Ver detalle del analisis ${info.row.original.analysisId}`}
+          aria-label={`Ver detalle del analisis ${info.row.original.clientEvidenceId}`}
         >
           <Eye className="h-4 w-4" />
         </button>
@@ -169,6 +161,7 @@ export function EvidenceAnalysesPage() {
     data: analyses,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getRowId: (row) => row.clientEvidenceId,
   });
 
   const hasFilters =
@@ -177,7 +170,7 @@ export function EvidenceAnalysesPage() {
     routeIdInput !== '' ||
     orderIdInput !== '';
 
-  if (query.isError) {
+  if (query.isError && !query.data && !activeEvidenceId) {
     return (
       <ApiErrorState
         title="Error al cargar análisis"
@@ -195,6 +188,12 @@ export function EvidenceAnalysesPage() {
       />
 
       <div className="space-y-6 px-4 py-6 md:px-8">
+        <div className="flex justify-end">
+          <Button variant="secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>
+            {query.isFetching ? 'Actualizando…' : 'Actualizar historial'}
+          </Button>
+        </div>
+        {query.isError ? <p role="alert" className="text-sm text-red-800">No se pudo actualizar el historial. Se muestran los últimos datos disponibles.</p> : null}
         <DegradedSectionsBanner sections={query.data?.degradedSections} />
 
         <Card className="p-4">
@@ -331,7 +330,7 @@ export function EvidenceAnalysesPage() {
                     <tr
                       key={row.id}
                       onClick={() =>
-                        setSelectedAnalysisId(row.original.analysisId)
+                        openDetail(row.original.clientEvidenceId)
                       }
                       className="cursor-pointer hover:bg-slate-50"
                     >
@@ -352,35 +351,13 @@ export function EvidenceAnalysesPage() {
         )}
       </div>
 
-      {selectedRecord ? (
-        <DetailDrawer
-          title="Detalle de análisis"
-          subtitle={
-            <span className="font-mono break-all">{selectedRecord.analysisId}</span>
-          }
-          onClose={() => setSelectedAnalysisId(null)}
-          width="md:w-[36rem]"
-        >
-          <EvidenceAnalysisDetail analysis={toEvidenceAnalysisView(selectedRecord)} />
-        </DetailDrawer>
-      ) : null}
-
-      {needsExternalDetail && evidenceIdParam ? (
-        <DetailDrawer
-          title="Detalle de análisis"
-          subtitle={
-            <span className="font-mono break-all">{evidenceIdParam}</span>
-          }
-          onClose={() => setSearchParams({})}
-          width="md:w-[36rem]"
-        >
-          <EvidenceAnalysisDetail
-            analysis={detailQuery.data}
-            isLoading={detailQuery.isLoading}
-            error={detailQuery.error}
+      {activeEvidenceId ? (
+        <DetailDrawer title="Detalle de evidencia" subtitle={<span className="font-mono break-all">{activeEvidenceId}</span>}
+          onClose={closeDetail} width="md:w-[36rem]">
+          <EvidenceAnalysisDetail evidenceId={activeEvidenceId} analysis={detailView}
+            isLoading={detailQuery.isLoading && !detailView} error={detailQuery.error}
             onRetry={() => void detailQuery.refetch()}
-            emptyMessage="No encontramos un análisis para esta evidencia."
-          />
+            emptyMessage="Esta evidencia aún no tiene un análisis registrado." />
         </DetailDrawer>
       ) : null}
     </div>
