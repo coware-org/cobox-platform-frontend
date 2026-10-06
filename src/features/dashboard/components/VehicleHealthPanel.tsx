@@ -7,7 +7,6 @@ import type { MaintenanceOrderSummary } from '../types';
 import { formatCurrency, formatDateTime, formatWeight } from '../utils/formatters';
 import { DashboardDetailsPanel } from './DashboardDetailsPanel';
 import { DashboardStatusBadge } from './DashboardStatusBadge';
-import { DegradedSectionsBanner } from './DegradedSectionsBanner';
 
 type VehicleHealthPanelProps = {
   vehicleId: number;
@@ -77,8 +76,6 @@ export function VehicleHealthPanel({ vehicleId, onClose }: VehicleHealthPanelPro
 
       {vehicleHealth ? (
         <div className="space-y-4">
-          <DegradedSectionsBanner sections={vehicleHealth.degradedSections} />
-
           <Card className="p-4">
             <div className="flex gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-[#0F766E]">

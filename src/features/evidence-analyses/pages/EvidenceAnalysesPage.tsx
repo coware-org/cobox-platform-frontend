@@ -10,7 +10,6 @@ import { Eye } from 'lucide-react';
 import { Button, Card, Input, Select, Skeleton } from '@/components/ui';
 import { ApiErrorState } from '@/components/shared';
 import {
-  DegradedSectionsBanner,
   DetailDrawer,
   EmptyState,
   PageHeader,
@@ -194,7 +193,6 @@ export function EvidenceAnalysesPage() {
           </Button>
         </div>
         {query.isError ? <p role="alert" className="text-sm text-red-800">No se pudo actualizar el historial. Se muestran los últimos datos disponibles.</p> : null}
-        <DegradedSectionsBanner sections={query.data?.degradedSections} />
 
         <Card className="p-4">
           <div className="flex flex-col items-end gap-4 md:flex-row">

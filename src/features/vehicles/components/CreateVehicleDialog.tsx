@@ -10,13 +10,13 @@ type CreateVehicleDialogProps = {
   onSubmit: (payload: CreateVehiclePayload) => void;
 };
 
-const emptyForm: CreateVehiclePayload = {
+const emptyForm = {
   plateNumber: '',
-  capacityKg: 0,
+  capacityKg: '',
 };
 
 export function CreateVehicleDialog({ open, isSubmitting, onClose, onSubmit }: CreateVehicleDialogProps) {
-  const [form, setForm] = useState<CreateVehiclePayload>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export function CreateVehicleDialog({ open, isSubmitting, onClose, onSubmit }: C
             type="number"
             min={0}
             value={form.capacityKg}
-            onChange={(event) => setForm((current) => ({ ...current, capacityKg: Number(event.target.value) }))}
+            onChange={(event) => setForm((current) => ({ ...current, capacityKg: event.target.value }))}
           />
         </label>
       </div>

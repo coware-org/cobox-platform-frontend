@@ -119,8 +119,26 @@ function formatKilometers(value?: number | null) {
   return typeof value === 'number' ? `${value.toLocaleString('es-PE')} km` : '-';
 }
 
-function emptyRule(): MaintenanceRule {
-  return { name: '', thresholdKm: 0, thresholdDays: 0 };
+type RuleDraft = { name: string; thresholdKm: string; thresholdDays: string };
+
+function emptyRule(): RuleDraft {
+  return { name: '', thresholdKm: '', thresholdDays: '' };
+}
+
+function toRuleDraft(rule: MaintenanceRule): RuleDraft {
+  return {
+    name: rule.name ?? '',
+    thresholdKm: rule.thresholdKm === null || rule.thresholdKm === undefined ? '' : String(rule.thresholdKm),
+    thresholdDays: rule.thresholdDays === null || rule.thresholdDays === undefined ? '' : String(rule.thresholdDays),
+  };
+}
+
+function toMaintenanceRule(draft: RuleDraft): MaintenanceRule {
+  return {
+    name: draft.name,
+    thresholdKm: Number(draft.thresholdKm),
+    thresholdDays: Number(draft.thresholdDays),
+  };
 }
 
 export function MaintenancePage() {
@@ -818,7 +836,9 @@ function MaintenanceScheduleDialog({
   onRules: (payload: UpdateMaintenanceRulesPayload) => void;
 }) {
   const [vehicleId, setVehicleId] = useState('');
-  const [rules, setRules] = useState<MaintenanceRule[]>(schedule?.rules?.length ? schedule.rules : [emptyRule()]);
+  const [rules, setRules] = useState<RuleDraft[]>(
+    schedule?.rules?.length ? schedule.rules.map(toRuleDraft) : [emptyRule()],
+  );
 
   useEffect(() => {
     if (type === 'create-schedule') {
@@ -826,16 +846,16 @@ function MaintenanceScheduleDialog({
       setRules([emptyRule()]);
     }
     if (type === 'rules') {
-      setRules(schedule?.rules?.length ? schedule.rules : [emptyRule()]);
+      setRules(schedule?.rules?.length ? schedule.rules.map(toRuleDraft) : [emptyRule()]);
     }
   }, [schedule, type]);
 
   if (!type) return null;
-  const updateRule = (index: number, field: keyof MaintenanceRule, value: string) => {
-    setRules((current) => current.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, [field]: field === 'name' ? value : Number(value) } : rule));
+  const updateRule = (index: number, field: keyof RuleDraft, value: string) => {
+    setRules((current) => current.map((rule, ruleIndex) => (ruleIndex === index ? { ...rule, [field]: value } : rule)));
   };
   const submit = () => {
-    const payload = { rules: rules.filter((rule) => rule.name.trim()) };
+    const payload = { rules: rules.filter((rule) => rule.name.trim()).map(toMaintenanceRule) };
     if (type === 'create-schedule') onCreate({ vehicleId: Number(vehicleId), ...payload });
     if (type === 'rules') onRules(payload);
   };

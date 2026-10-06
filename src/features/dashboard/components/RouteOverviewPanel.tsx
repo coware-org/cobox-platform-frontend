@@ -7,7 +7,6 @@ import type { OrderSummary } from '../types';
 import { formatDateTime, formatWeight } from '../utils/formatters';
 import { DashboardDetailsPanel } from './DashboardDetailsPanel';
 import { DashboardStatusBadge } from './DashboardStatusBadge';
-import { DegradedSectionsBanner } from './DegradedSectionsBanner';
 
 type RouteOverviewPanelProps = {
   routeId: number;
@@ -78,8 +77,6 @@ export function RouteOverviewPanel({ routeId, onClose, onOpenVehicle }: RouteOve
 
       {routeOverview ? (
         <div className="space-y-4">
-          <DegradedSectionsBanner sections={routeOverview.degradedSections} />
-
           <Card className="p-4">
             <div className="flex gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB]">

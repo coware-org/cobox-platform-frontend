@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Package, Truck, X } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import { ApiErrorState } from '@/components/shared';
-import { DegradedSectionsBanner } from '@/components/common';
 import { Button, Card, Skeleton } from '@/components/ui';
 import { useVehicle, useVehicleHealth } from '../hooks';
 import type { Vehicle, VehicleHealthOrderSummary, VehicleHealthScheduleSummary } from '../types';
@@ -154,8 +153,6 @@ export function VehicleDetailsPanel({ vehicleId, onClose, onChangeStatus }: Vehi
                   <p className="mt-2 text-sm font-medium text-slate-950">{formatCapacity(vehicle.capacityKg)}</p>
                 </div>
               </Card>
-
-              <DegradedSectionsBanner sections={healthQuery.data?.degradedSections} />
 
               <Card className="p-4">
                 <h3 className="text-sm font-semibold text-slate-950">Salud del vehiculo</h3>

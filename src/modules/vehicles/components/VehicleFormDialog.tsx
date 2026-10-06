@@ -11,18 +11,25 @@ type VehicleFormDialogProps = {
   onSubmit: (payload: CreateVehiclePayload) => void;
 };
 
-const emptyVehicle: CreateVehiclePayload = {
+type VehicleFormValues = {
+  plate: string;
+  capacity: string;
+  status: CreateVehiclePayload["status"];
+  model: string;
+};
+
+const emptyVehicle: VehicleFormValues = {
   plate: "",
-  capacity: 0,
+  capacity: "",
   status: "operational",
   model: "",
 };
 
-function vehicleToForm(vehicle: Vehicle | null | undefined): CreateVehiclePayload {
+function vehicleToForm(vehicle: Vehicle | null | undefined): VehicleFormValues {
   if (!vehicle) return { ...emptyVehicle };
   return {
     plate: vehicle.plate,
-    capacity: vehicle.capacity,
+    capacity: vehicle.capacity === null || vehicle.capacity === undefined ? "" : String(vehicle.capacity),
     status: vehicle.status,
     model: vehicle.model,
   };
@@ -35,7 +42,7 @@ export function VehicleFormDialog({
   onClose,
   onSubmit,
 }: VehicleFormDialogProps) {
-  const [form, setForm] = useState<CreateVehiclePayload>(vehicleToForm(initialVehicle));
+  const [form, setForm] = useState<VehicleFormValues>(vehicleToForm(initialVehicle));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,15 +52,18 @@ export function VehicleFormDialog({
     }
   }, [open, initialVehicle]);
 
-  const updateField = (field: keyof CreateVehiclePayload, value: string) => {
-    setForm((current) => ({
-      ...current,
-      [field]: field === "capacity" ? Number(value) : value,
-    }));
+  const updateField = <K extends keyof VehicleFormValues>(field: K, value: VehicleFormValues[K]) => {
+    setForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleSubmit = () => {
-    const result = vehicleSchema.safeParse(form);
+    const payload: CreateVehiclePayload = {
+      plate: form.plate,
+      capacity: Number(form.capacity),
+      status: form.status,
+      model: form.model,
+    };
+    const result = vehicleSchema.safeParse(payload);
 
     if (!result.success) {
       setError(result.error.issues[0]?.message ?? "Formulario invalido");
@@ -90,7 +100,7 @@ export function VehicleFormDialog({
           Estado
           <Select
             value={form.status}
-            onChange={(event) => updateField("status", event.target.value)}
+            onChange={(event) => updateField("status", event.target.value as VehicleFormValues["status"])}
           >
             <option value="operational">Operativo</option>
             <option value="maintenance">Mantenimiento</option>

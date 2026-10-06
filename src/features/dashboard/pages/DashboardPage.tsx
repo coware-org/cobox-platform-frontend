@@ -8,7 +8,6 @@ import {
   DashboardKpiCard,
   DashboardStatusBadge,
   DashboardStatusChart,
-  DegradedSectionsBanner,
   RouteOverviewPanel,
   VehicleHealthPanel,
 } from '../components';
@@ -207,8 +206,6 @@ export function DashboardPage() {
           Refrescar
         </Button>
       </div>
-
-      <DegradedSectionsBanner sections={data.degradedSections} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <DashboardKpiCard title="Vehiculos" value={data.fleet.totalVehicles} detail="Unidades registradas" icon={Truck} tone="teal" />

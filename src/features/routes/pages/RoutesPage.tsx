@@ -1,33 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { ApiErrorState } from '@/components/shared';
 import { Button, Card, Input, Select, Skeleton, useToast } from '@/components/ui';
 import { useDrivers } from '@/features/drivers';
-import { ordersService } from '@/features/orders/services';
+import { useOrders } from '@/features/orders/hooks';
 import { useVehicles } from '@/features/vehicles';
-import {
-  AddDeliveredOrderToRouteDialog,
-  AddOrderToRouteDialog,
-  AssignDriverToRouteDialog,
-  AssignVehicleToRouteDialog,
-  CreateRouteDialog,
-  RouteCard,
-  RouteDetailsPanel,
-} from '../components';
+import { CreateRouteDialog, RouteAssignmentDialog, RouteCard, RouteDetailsPanel } from '../components';
 import {
   useAddDeliveredOrderToRoute,
-  useAddOrderToRoute,
-  useAssignDriverToRoute,
-  useAssignVehicleToRoute,
+  useAssignRoutePlan,
   useCreateRoute,
   useMarkRouteInProgress,
   useRoutes,
 } from '../hooks';
 import type { CreateRoutePayload, Route, RouteStatus } from '../types';
-import { validatePositiveId } from '../validations';
-
-type RouteAction = 'driver' | 'vehicle' | 'order' | 'delivered';
 
 const statusOptions: { value: 'all' | RouteStatus; label: string }[] = [
   { value: 'all', label: 'Todos los estados' },
@@ -42,34 +28,25 @@ export function RoutesPage() {
   const [driverFilter, setDriverFilter] = useState('all');
   const [vehicleFilter, setVehicleFilter] = useState('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedRouteId, setSelectedRouteId] = useState<string>();
-  const [actionRoute, setActionRoute] = useState<Route | null>(null);
-  const [action, setAction] = useState<RouteAction | null>(null);
-  const [selectedDriverId, setSelectedDriverId] = useState('');
-  const [selectedVehicleId, setSelectedVehicleId] = useState('');
-  const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [detailsRouteId, setDetailsRouteId] = useState<string>();
+  const [assignmentRoute, setAssignmentRoute] = useState<Route | null>(null);
 
   const routesQuery = useRoutes();
   const driversQuery = useDrivers();
   const vehiclesQuery = useVehicles();
-  const ordersQuery = useQuery({
-    queryKey: ['orders', 'route-actions'],
-    queryFn: ordersService.getOrders,
-  });
+  const ordersQuery = useOrders();
 
   const createRoute = useCreateRoute();
-  const assignDriver = useAssignDriverToRoute();
-  const assignVehicle = useAssignVehicleToRoute();
-  const addOrder = useAddOrderToRoute();
-  const addDeliveredOrder = useAddDeliveredOrderToRoute();
   const markInProgress = useMarkRouteInProgress();
+  const addDeliveredOrder = useAddDeliveredOrderToRoute();
+  const assignment = useAssignRoutePlan();
   const { toast } = useToast();
 
   const routes = useMemo(() => routesQuery.data ?? [], [routesQuery.data]);
   const drivers = useMemo(() => driversQuery.data ?? [], [driversQuery.data]);
   const vehicles = useMemo(() => vehiclesQuery.data ?? [], [vehiclesQuery.data]);
   const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
-  const selectedRoute = useMemo(() => routes.find((route) => route.id === selectedRouteId), [routes, selectedRouteId]);
+  const selectedRoute = useMemo(() => routes.find((route) => route.id === detailsRouteId), [routes, detailsRouteId]);
 
   const driverById = useMemo(() => new Map(drivers.map((driver) => [driver.id, driver])), [drivers]);
   const vehicleById = useMemo(() => new Map(vehicles.map((vehicle) => [vehicle.id, vehicle])), [vehicles]);
@@ -95,34 +72,6 @@ export function RoutesPage() {
     });
   }, [driverById, driverFilter, routes, search, statusFilter, vehicleById, vehicleFilter]);
 
-  const actionCandidateOrders = useMemo(() => {
-    if (!actionRoute) return [];
-    const orderIds = actionRoute.orderIds ?? [];
-    const finishedOrderIds = actionRoute.finishedOrderIds ?? [];
-
-    if (action === 'delivered') {
-      return orders.filter((order) => orderIds.includes(order.id) && !finishedOrderIds.includes(order.id));
-    }
-
-    return orders.filter((order) => order.status === 'READY_FOR_DISPATCH' && !orderIds.includes(order.id));
-  }, [action, actionRoute, orders]);
-
-  const closeAction = () => {
-    setActionRoute(null);
-    setAction(null);
-    setSelectedDriverId('');
-    setSelectedVehicleId('');
-    setSelectedOrderId('');
-  };
-
-  const openAction = (route: Route, nextAction: RouteAction) => {
-    setActionRoute(route);
-    setAction(nextAction);
-    setSelectedDriverId(nextAction === 'driver' ? route.driverId ?? '' : '');
-    setSelectedVehicleId(nextAction === 'vehicle' ? route.vehicleId ?? '' : '');
-    setSelectedOrderId('');
-  };
-
   const driverLabel = (route: Route) => {
     const driver = route.driverId ? driverById.get(route.driverId) : null;
     return driver ? `${driver.email} - ${driver.licenceNumber}` : route.driverId ? `Conductor #${route.driverId}` : 'Sin asignar';
@@ -133,90 +82,18 @@ export function RoutesPage() {
     return vehicle ? vehicle.plateNumber : route.vehicleId ? `Vehiculo #${route.vehicleId}` : 'Sin asignar';
   };
 
+  // Crear la ruta y configurarla son pasos separados, pero la ruta recien creada
+  // no sirve de nada vacia: en cuanto el backend la devuelve se abre la
+  // asignacion para que quede lista para despachar sin cambiar de pantalla.
   const handleCreateRoute = (payload: CreateRoutePayload) => {
     createRoute.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: (createdRoute) => {
         setIsCreateOpen(false);
         toast({ title: 'Ruta creada correctamente', type: 'success' });
+        setAssignmentRoute(createdRoute);
       },
       onError: () => toast({ title: 'No se pudo crear la ruta', type: 'error' }),
     });
-  };
-
-  const handleAssignDriver = () => {
-    if (!actionRoute || !selectedDriverId) return;
-    const validationError = validatePositiveId(selectedDriverId, 'El conductor');
-    if (validationError) {
-      toast({ title: validationError, type: 'error' });
-      return;
-    }
-    assignDriver.mutate(
-      { routeId: actionRoute.id, payload: { driverId: selectedDriverId } },
-      {
-        onSuccess: () => {
-          closeAction();
-          toast({ title: 'Conductor asignado a la ruta', type: 'success' });
-        },
-        onError: () => toast({ title: 'No se pudo asignar el conductor', type: 'error' }),
-      },
-    );
-  };
-
-  const handleAssignVehicle = () => {
-    if (!actionRoute || !selectedVehicleId) return;
-    const validationError = validatePositiveId(selectedVehicleId, 'El vehiculo');
-    if (validationError) {
-      toast({ title: validationError, type: 'error' });
-      return;
-    }
-    assignVehicle.mutate(
-      { routeId: actionRoute.id, payload: { vehicleId: selectedVehicleId } },
-      {
-        onSuccess: () => {
-          closeAction();
-          toast({ title: 'Vehiculo asignado a la ruta', type: 'success' });
-        },
-        onError: () => toast({ title: 'No se pudo asignar el vehiculo', type: 'error' }),
-      },
-    );
-  };
-
-  const handleAddOrder = () => {
-    if (!actionRoute || !selectedOrderId) return;
-    const validationError = validatePositiveId(selectedOrderId, 'La orden');
-    if (validationError) {
-      toast({ title: validationError, type: 'error' });
-      return;
-    }
-    addOrder.mutate(
-      { routeId: actionRoute.id, payload: { orderId: selectedOrderId } },
-      {
-        onSuccess: () => {
-          closeAction();
-          toast({ title: 'Orden agregada a la ruta', type: 'success' });
-        },
-        onError: () => toast({ title: 'No se pudo agregar la orden', type: 'error' }),
-      },
-    );
-  };
-
-  const handleAddDeliveredOrder = () => {
-    if (!actionRoute || !selectedOrderId) return;
-    const validationError = validatePositiveId(selectedOrderId, 'La orden');
-    if (validationError) {
-      toast({ title: validationError, type: 'error' });
-      return;
-    }
-    addDeliveredOrder.mutate(
-      { routeId: actionRoute.id, payload: { orderId: selectedOrderId } },
-      {
-        onSuccess: () => {
-          closeAction();
-          toast({ title: 'Orden registrada como entregada', type: 'success' });
-        },
-        onError: () => toast({ title: 'No se pudo registrar la orden entregada', type: 'error' }),
-      },
-    );
   };
 
   const handleStartRoute = (routeId: string) => {
@@ -225,6 +102,30 @@ export function RoutesPage() {
       onError: () => toast({ title: 'No se pudo iniciar la ruta', type: 'error' }),
     });
   };
+
+  const handleMarkOrderDelivered = (routeId: string, orderId: string) => {
+    addDeliveredOrder.mutate(
+      { routeId, payload: { orderId } },
+      {
+        onSuccess: () => toast({ title: 'Orden registrada como entregada', type: 'success' }),
+        onError: () => toast({ title: 'No se pudo registrar la orden entregada', type: 'error' }),
+      },
+    );
+  };
+
+  const handleSubmitAssignment = (selection: Parameters<typeof assignment.submit>[0]['selection']) => {
+    if (!assignmentRoute) return;
+
+    void assignment
+      .submit({ route: assignmentRoute, selection, orders, title: assignmentRoute.title })
+      .then((result) => {
+        if (result.outcome === 'SUCCEEDED') setAssignmentRoute(null);
+      });
+  };
+
+  const routeWarnings = assignmentRoute ? (assignment.warningsByRoute[assignmentRoute.id] ?? []) : [];
+  const routeFailure = assignmentRoute && assignment.lastFailure?.routeId === assignmentRoute.id ? assignment.lastFailure : null;
+  const isAssignmentsLoading = ordersQuery.isLoading || driversQuery.isLoading || vehiclesQuery.isLoading;
 
   return (
     <section className="space-y-6">
@@ -289,12 +190,9 @@ export function RoutesPage() {
               driverLabel={driverLabel(route)}
               vehicleLabel={vehicleLabel(route)}
               isStarting={markInProgress.isPending}
-              onAssignDriver={(selectedRoute) => openAction(selectedRoute, 'driver')}
-              onAssignVehicle={(selectedRoute) => openAction(selectedRoute, 'vehicle')}
-              onAddOrder={(selectedRoute) => openAction(selectedRoute, 'order')}
-              onAddDeliveredOrder={(selectedRoute) => openAction(selectedRoute, 'delivered')}
+              onAssign={setAssignmentRoute}
               onStartRoute={handleStartRoute}
-              onViewDetails={setSelectedRouteId}
+              onViewDetails={setDetailsRouteId}
             />
           ))
         )}
@@ -311,57 +209,39 @@ export function RoutesPage() {
         onSubmit={handleCreateRoute}
       />
 
-      <AssignDriverToRouteDialog
-        open={action === 'driver'}
-        route={actionRoute}
+      <RouteAssignmentDialog
+        open={assignmentRoute !== null}
+        route={assignmentRoute}
+        routes={routes}
+        lockedOrderId={null}
+        vehicles={vehicles}
         drivers={drivers}
-        selectedDriverId={selectedDriverId}
-        isSubmitting={assignDriver.isPending}
-        onSelectedDriverChange={setSelectedDriverId}
-        onClose={closeAction}
-        onSubmit={handleAssignDriver}
+        orders={orders}
+        isSubmitting={assignment.isPending}
+        isLoading={isAssignmentsLoading}
+        warnings={routeWarnings}
+        failure={routeFailure}
+        appliedOrderIds={assignment.appliedOrderIds}
+        onSelectedRouteChange={() => undefined}
+        onSelectedVehicleChange={() => undefined}
+        onSelectedDriverChange={() => undefined}
+        onDismissWarnings={() => {
+          if (assignmentRoute) assignment.dismissWarnings(assignmentRoute.id);
+        }}
+        onClose={() => setAssignmentRoute(null)}
+        onSubmit={handleSubmitAssignment}
       />
 
-      <AssignVehicleToRouteDialog
-        open={action === 'vehicle'}
-        route={actionRoute}
-        selectedVehicleId={selectedVehicleId}
-        isSubmitting={assignVehicle.isPending}
-        onSelectedVehicleChange={setSelectedVehicleId}
-        onClose={closeAction}
-        onSubmit={handleAssignVehicle}
-      />
-
-      <AddOrderToRouteDialog
-        open={action === 'order'}
-        route={actionRoute}
-        orders={actionCandidateOrders}
-        selectedOrderId={selectedOrderId}
-        isSubmitting={addOrder.isPending || ordersQuery.isLoading}
-        onSelectedOrderChange={setSelectedOrderId}
-        onClose={closeAction}
-        onSubmit={handleAddOrder}
-      />
-
-      <AddDeliveredOrderToRouteDialog
-        open={action === 'delivered'}
-        route={actionRoute}
-        orders={actionCandidateOrders}
-        selectedOrderId={selectedOrderId}
-        isSubmitting={addDeliveredOrder.isPending || ordersQuery.isLoading}
-        onSelectedOrderChange={setSelectedOrderId}
-        onClose={closeAction}
-        onSubmit={handleAddDeliveredOrder}
-      />
-
-      {selectedRouteId !== undefined ? (
+      {detailsRouteId !== undefined ? (
         <RouteDetailsPanel
-          routeId={selectedRouteId}
+          routeId={detailsRouteId}
           driverLabel={selectedRoute ? driverLabel(selectedRoute) : 'Sin asignar'}
           vehicleLabel={selectedRoute ? vehicleLabel(selectedRoute) : 'Sin asignar'}
           isStarting={markInProgress.isPending}
-          onClose={() => setSelectedRouteId(undefined)}
+          isMarkingDelivered={addDeliveredOrder.isPending}
+          onClose={() => setDetailsRouteId(undefined)}
           onStartRoute={handleStartRoute}
+          onMarkOrderDelivered={handleMarkOrderDelivered}
         />
       ) : null}
     </section>
