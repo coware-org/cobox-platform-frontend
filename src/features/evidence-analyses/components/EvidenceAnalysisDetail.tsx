@@ -4,7 +4,6 @@ import type { EvidenceAnalysisDetailView } from '../types';
 import { EvidenceAnalysisStatusBadge } from './EvidenceAnalysisStatusBadge';
 import { EvidencePhoto } from './EvidencePhoto';
 import { EvidenceDimensionalSection } from './EvidenceDimensionalSection';
-import { DegradedSectionsBanner } from '@/components/common';
 
 type EvidenceAnalysisDetailProps = {
   analysis?: EvidenceAnalysisDetailView | null;
