@@ -17,24 +17,26 @@ export function AssignResponsibleDialog({
   onClose,
   onSubmit,
 }: AssignResponsibleDialogProps) {
-  const [responsibleUserId, setResponsibleUserId] = useState<number | "">("");
+  const [responsibleUserId, setResponsibleUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!responsibleUserId || typeof responsibleUserId !== "number") {
+    const parsedId = Number(responsibleUserId);
+
+    if (!responsibleUserId.trim() || !Number.isInteger(parsedId)) {
       setError("Debe especificar un ID de usuario válido");
       return;
     }
 
-    if (responsibleUserId === currentResponsibleId) {
+    if (parsedId === currentResponsibleId) {
       setError("El usuario ya está asignado a este incidente");
       return;
     }
 
     setError(null);
-    onSubmit({ responsibleUserId });
+    onSubmit({ responsibleUserId: parsedId });
     setResponsibleUserId("");
   };
 
@@ -68,11 +70,7 @@ export function AssignResponsibleDialog({
             type="number"
             placeholder="ej: 123"
             value={responsibleUserId}
-            onChange={(e) =>
-              setResponsibleUserId(
-                e.target.value ? parseInt(e.target.value) : "",
-              )
-            }
+            onChange={(e) => setResponsibleUserId(e.target.value)}
             disabled={isSubmitting}
             min={1}
           />
