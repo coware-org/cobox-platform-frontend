@@ -1,5 +1,6 @@
 import { degradedSections, numberField, operationalContext, record, resourceList, textField, uniqueDegradedSections } from '../../../utils/smartvision.ts';
 import type { EvidenceAnalysis, EvidenceAnalysisDetailView, EvidenceAnalysesSummary } from '../types';
+import { mergeDimensional, toDimensionalValidation } from './dimensional.ts';
 
 export function toAiEvidenceAnalysisView(data: unknown): EvidenceAnalysisDetailView {
   const source = record(data);
@@ -16,11 +17,12 @@ export function toAiEvidenceAnalysisView(data: unknown): EvidenceAnalysisDetailV
     ...operationalContext({}, source),
     confidence: numberField(source, 'confidenceScore', 'aiConfidence'),
     fraudScore: numberField(source, 'fraudScore'),
-    summary: textField(source, 'validationSummary', 'aiSummary'),
+    summary: textField(source, 'validationSummary'),
     failureReason: textField(source, 'failureReason'),
     detectedLabels: Array.isArray(labels) ? labels.filter((label): label is string => typeof label === 'string') : null,
     ocrText: textField(source, 'ocrText'),
     analysisData: source.analysisData == null ? null : record(source.analysisData),
+    dimensional: toDimensionalValidation(source),
     createdAt: textField(source, 'createdAt'),
     processedAt: textField(source, 'completedAt', 'processedAt'),
   };
@@ -63,6 +65,7 @@ export function mergeEvidenceDetail(context: EvidenceAnalysisDetailView | null, 
     vehiclePlate: detail.vehiclePlate ?? context.vehiclePlate,
     orderLabel: detail.orderLabel ?? context.orderLabel,
     degradedSections: context.degradedSections,
+    dimensional: mergeDimensional(context.dimensional, detail.dimensional),
   };
 }
 

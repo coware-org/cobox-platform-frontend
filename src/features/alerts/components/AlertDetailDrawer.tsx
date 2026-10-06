@@ -79,6 +79,7 @@ function toAlertEvidenceView(alert: AlertDetail): EvidenceAnalysisDetailView {
     failureReason: null,
     detectedLabels: null,
     analysisData: alert.analysisData,
+    dimensional: null,
     createdAt: alert.createdAt,
     processedAt: null,
   };

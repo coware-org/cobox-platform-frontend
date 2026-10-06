@@ -9,6 +9,33 @@ export type EvidenceAnalysisStatus = typeof evidenceAnalysisStatuses[number];
 export type AiEvidenceAnalysisStatus = EvidenceAnalysisStatus;
 export type EvidenceAnalysisViewStatus = EvidenceAnalysisStatus;
 
+export type VisualAssessmentValue = 'COMPATIBLE' | 'INCOMPATIBLE' | 'UNDETERMINED';
+export type GeographicAssessmentValue = 'MATCH' | 'MISMATCH' | 'UNVERIFIABLE';
+export type ContextAssessmentValue = 'COMPATIBLE' | 'PARTIAL' | 'INCONSISTENT';
+export type DimensionalVerdictValue = 'COMPATIBLE' | 'REVIEW_REQUIRED' | 'INCONSISTENT';
+export type DimensionalRecommendationValue = 'AUTO_APPROVE' | 'MANUAL_REVIEW' | 'REJECT';
+export type CaptureSourceValue = 'CAMERA' | 'GALLERY';
+export type ReasonCode =
+  | 'VISUAL_INCOMPATIBLE_SCENE'
+  | 'VISUAL_UNDETERMINED'
+  | 'GEO_MISMATCH'
+  | 'GEO_UNVERIFIABLE'
+  | 'GALLERY_CAPTURE_LOCATION_UNVERIFIED'
+  | 'CONTEXT_TEMPORAL_MISMATCH'
+  | 'CONTEXT_PARTIAL_DATA';
+export type ReasonCodesResult = { known: ReasonCode[]; unknown: string[] };
+
+export type DimensionalValidation = {
+  visualAssessment: VisualAssessmentValue | null;
+  visualConfidence: number | null;
+  geographicAssessment: GeographicAssessmentValue | null;
+  contextAssessment: ContextAssessmentValue | null;
+  verdict: DimensionalVerdictValue | null;
+  reasonCodes: ReasonCodesResult;
+  recommendation: DimensionalRecommendationValue | null;
+  captureSource: CaptureSourceValue | null;
+};
+
 /** Contrato REST de ai-validation, independiente del contexto del BFF. */
 export type AiEvidenceAnalysisResource = {
   clientEvidenceId: string;
@@ -22,6 +49,14 @@ export type AiEvidenceAnalysisResource = {
   confidenceScore: number | null;
   fraudScore: number | null;
   validationSummary: string | null;
+  visualAssessment?: string | null;
+  visualConfidence?: number | null;
+  geographicAssessment?: string | null;
+  contextAssessment?: string | null;
+  verdict?: string | null;
+  reasonCodes?: string[] | string | null;
+  recommendation?: string | null;
+  captureSource?: string | null;
   failureReason: string | null;
   createdAt: string;
   completedAt: string | null;
@@ -61,6 +96,7 @@ export type EvidenceAnalysisDetailView = {
   failureReason: string | null;
   detectedLabels: string[] | null;
   analysisData: Record<string, unknown> | null;
+  dimensional: DimensionalValidation | null;
   createdAt: string | null;
   processedAt: string | null;
   ocrText?: string | null;

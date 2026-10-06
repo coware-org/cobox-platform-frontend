@@ -3,6 +3,8 @@ import { Button, Skeleton } from '@/components/ui';
 import type { EvidenceAnalysisDetailView } from '../types';
 import { EvidenceAnalysisStatusBadge } from './EvidenceAnalysisStatusBadge';
 import { EvidencePhoto } from './EvidencePhoto';
+import { EvidenceDimensionalSection } from './EvidenceDimensionalSection';
+import { DegradedSectionsBanner } from '@/components/common';
 
 type EvidenceAnalysisDetailProps = {
   analysis?: EvidenceAnalysisDetailView | null;
@@ -110,6 +112,10 @@ function EvidenceAnalysisResult({
           </p>
         </div>
       </div>
+
+      {analysis.dimensional ? (
+        <EvidenceDimensionalSection dimensional={analysis.dimensional} />
+      ) : null}
 
       <dl className="grid gap-4 sm:grid-cols-2">
         <Field

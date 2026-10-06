@@ -18,7 +18,7 @@ export function CreateIncidentDialog({
   const [type, setType] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState<IncidentSeverity>("MEDIUM");
-  const [responsibleUserId, setResponsibleUserId] = useState<number | "">("");
+  const [responsibleUserId, setResponsibleUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -45,7 +45,8 @@ export function CreateIncidentDialog({
       setError("La descripción no puede exceder 2000 caracteres");
       return;
     }
-    if (!responsibleUserId || typeof responsibleUserId !== "number") {
+    const parsedResponsibleId = Number(responsibleUserId);
+    if (!responsibleUserId.trim() || !Number.isInteger(parsedResponsibleId)) {
       setError("Debe especificar un usuario responsable");
       return;
     }
@@ -55,7 +56,7 @@ export function CreateIncidentDialog({
       type: type.trim(),
       description: description.trim(),
       severity,
-      responsibleUserId: responsibleUserId as number,
+      responsibleUserId: parsedResponsibleId,
     });
 
     // Reset form
@@ -147,11 +148,7 @@ export function CreateIncidentDialog({
               type="number"
               placeholder="ej: 123"
               value={responsibleUserId}
-              onChange={(e) =>
-                setResponsibleUserId(
-                  e.target.value ? parseInt(e.target.value) : "",
-                )
-              }
+              onChange={(e) => setResponsibleUserId(e.target.value)}
               disabled={isSubmitting}
               min={1}
             />

@@ -87,3 +87,71 @@ test('el servicio de foto usa JWT solo para pedir la autorización de descarga',
     setAuthTokenGetter(null);
   }
 });
+
+test('la sección dimensional se muestra con sus ejes y omite el chip sin origen', () => {
+  const html = renderDetail({ analysis: toAiEvidenceAnalysisView({
+    clientEvidenceId: evidenceId, status: 'COMPLETED',
+    visualAssessment: 'COMPATIBLE', visualConfidence: 0.92,
+    geographicAssessment: 'MATCH', contextAssessment: 'PARTIAL',
+    verdict: 'COMPATIBLE', recommendation: 'AUTO_APPROVE',
+    reasonCodes: ['CONTEXT_PARTIAL_DATA'], validationSummary: 'Entrega validada',
+  }) });
+  assert.match(html, /Validación dimensional/);
+  assert.match(html, /92%/);
+  assert.match(html, /Visual/);
+  assert.match(html, /Geográfico/);
+  assert.match(html, /Contextual/);
+  assert.match(html, /Aprobación sugerida/);
+  assert.doesNotMatch(html, /Origen/);
+});
+
+test('el chip Origen se muestra cuando hay origen de captura real', () => {
+  const html = renderDetail({ analysis: toAiEvidenceAnalysisView({
+    clientEvidenceId: evidenceId, status: 'COMPLETED',
+    visualAssessment: 'COMPATIBLE', captureSource: 'CAMERA',
+    reasonCodes: [],
+  }) });
+  assert.match(html, /Origen/);
+  assert.match(html, /Cámara/);
+});
+
+test('la sección dimensional se omite sin datos y el resto del detalle queda intacto', () => {
+  const html = renderDetail({ analysis: toAiEvidenceAnalysisView({
+    clientEvidenceId: evidenceId, status: 'COMPLETED', validationSummary: 'Entrega validada',
+    confidenceScore: 1, fraudScore: 0.2,
+  }) });
+  assert.doesNotMatch(html, /Validación dimensional/);
+  assert.match(html, /Estado del analisis/);
+  assert.match(html, /Entrega validada/);
+});
+
+test('veredicto y acción operativa se separan del estado del análisis', () => {
+  const html = renderDetail({ analysis: toAiEvidenceAnalysisView({
+    clientEvidenceId: evidenceId, status: 'REVIEW_REQUIRED',
+    verdict: 'REVIEW_REQUIRED', recommendation: 'MANUAL_REVIEW',
+    reasonCodes: ['GEO_UNVERIFIABLE'],
+  }) });
+  assert.match(html, /Estado del analisis/);
+  assert.match(html, /Veredicto/);
+  assert.match(html, /Revisión requerida/);
+  assert.match(html, /Acción:/);
+  assert.match(html, /Inspeccionar evidencia manualmente/);
+});
+
+test('un motivo no catalogado se muestra con su código crudo', () => {
+  const html = renderDetail({ analysis: toAiEvidenceAnalysisView({
+    clientEvidenceId: evidenceId, status: 'COMPLETED',
+    reasonCodes: ['MOTIVO_DESCONOCIDO'],
+  }) });
+  assert.match(html, /MOTIVO_DESCONOCIDO/);
+});
+
+test('los ejes ausentes se degradan sin romper el renderizado', () => {
+  const html = renderDetail({ analysis: toAiEvidenceAnalysisView({
+    clientEvidenceId: evidenceId, status: 'COMPLETED',
+    contextAssessment: 'INCONSISTENT', reasonCodes: [], captureSource: null,
+  }) });
+  assert.match(html, /Validación dimensional/);
+  assert.match(html, /—/);
+  assert.match(html, /Contextual/);
+});

@@ -1,0 +1,72 @@
+{
+  "approvals_to_reset": [
+    "requirements",
+    "design"
+  ],
+  "feature": "dimensional-evidence-validation-web",
+  "generated_at": "2026-10-06T05:09:23Z",
+  "items": [
+    {
+      "id": "FB-GLOSSARY-VERIFIED-9",
+      "impact": "El glosario de contrato HTTP listaba 9 nombres publicados que no existen en SmartVisionAnalysisResource: analysisSummary, overallVerdict, consistencyScore, summary y rationale. Cinco de las nueve claves eran ficticias, lo que induce al frontend a leer claves inexistentes y a modelar el recurso dimensional sobre una forma de contrato equivocada. La lista correcta fue verificada contra SmartVisionAnalysisResource.java:119-159.",
+      "recommendation": "Sustituir la lista por los 9 nombres verificados: visualAssessment, visualConfidence, geographicAssessment, contextAssessment, verdict, reasonCodes, recommendation, validationSummary, captureSource. Eliminar overallVerdict, analysisSummary, consistencyScore, rationale y summary de toda la lista. Conservar FB-WIRE-CAMELCASE reescribiendo la lista snake_case de ejemplo con los COLUMN names reales: visual_assessment, visual_confidence, geographic_assessment, context_assessment, verdict, reason_codes, recommendation, validation_summary, capture_source, location_source. Cambiar (overallVerdict) por (verdict) en el glosario de insignia de veredicto vs accion operativa.",
+      "severity": "blocker",
+      "targets": [
+        "requirements",
+        "design"
+      ],
+      "title": "Glosario de contrato HTTP: 9 nombres publicados verificados contra SmartVisionAnalysisResource.java:119-159",
+      "updates": {
+        "design": [
+          "Alinear los tipos del recurso publicado y la capa de mapeo con los 9 nombres verificados del glosario; ningún tipo frontend debe declarar overallVerdict, analysisSummary, consistencyScore, rationale ni summary."
+        ],
+        "requirements": [
+          "Glosario: sustituir la lista de 9 nombres publicados por visualAssessment, visualConfidence, geographicAssessment, contextAssessment, verdict, reasonCodes, recommendation, validationSummary, captureSource y declararla cerrada y verificada contra SmartVisionAnalysisResource.java:119-159 (FB-GLOSSARY-VERIFIED-9).",
+          "Glosario: reescribir la lista snake_case de ejemplo con los COLUMN names reales visual_assessment, visual_confidence, geographic_assessment, context_assessment, verdict, reason_codes, recommendation, validation_summary, capture_source, location_source, preservando la regla FB-WIRE-CAMELCASE.",
+          "Glosario de insignia de veredicto vs accion operativa: cambiar (overallVerdict) por (verdict) (FB-GLOSSARY-VERIFIED-9)."
+        ]
+      }
+    },
+    {
+      "id": "FB-CONFIDENCE-SHIELD-REJECTED",
+      "impact": "El predicado de confianza rechazaba valores fuera de [0,1] pero no prohibia explicitamente el 'escudo': un clamp, una reescala o una division por 100 para convertir 92.5 en 0.925. Eso reintroduce exactamente el valor legacy 0-100 (confidenceScore/fraudScore) que R-WEB-4 prohibe presentar como confianza visual, y hace el rechazo por rango no determinista entre implementaciones. La tabla de pruebas solo cubria el caso 0, dejando el rechazo por rango sin verificar.",
+      "recommendation": "Reforzar el predicado estricto sin escudo: en R-WEB-1 hacer explicito que los valores fuera de [0,1], incluidos 1.1, 2.5 y 92.5, se normalizan a null sin clamp, sin reescala y sin division por 100. En R-WEB-4 adicionar que la seccion dimensional SHALL NOT dividir por 100 ni reescalar valores recibidos. En R-WEB-8 ampliar la tabla de pruebas con toVisualConfidence(92.5/2.5/1.1/-0.1/NaN/Infinity/'0.92'/null) === null y formatConfidence01(0.925) === '93%', (0.92) === '92%', (0) === '0%', (null) === '—'.",
+      "severity": "major",
+      "targets": [
+        "requirements",
+        "design"
+      ],
+      "title": "Predicado de confianza estricto sin escudo: sin clamp, sin reescala y sin division por 100",
+      "updates": {
+        "design": [
+          "En la seccion 'Predicado dimensional de confianza', agregar una tabla de banned patterns para el camino de rechazo: clamp al rango, reescala lineal y division por 100, cualquiera de los tres invalida la implementacion."
+        ],
+        "requirements": [
+          "Actualizar R-WEB-1 (EARS): hacer explicito que los valores fuera de [0,1], incluidos 1.1, 2.5 y 92.5, se normalizan a null sin clamp, sin reescala y sin division por 100 (FB-CONFIDENCE-SHIELD-REJECTED).",
+          "Actualizar R-WEB-4 (EARS): adicionar que la seccion dimensional SHALL NOT dividir por 100 ni reescalar los valores de confianza recibidos (FB-CONFIDENCE-SHIELD-REJECTED).",
+          "Actualizar R-WEB-8 (EARS): ampliar la tabla de pruebas de confianza con los casos de rechazo y los casos de formateo indicados (FB-CONFIDENCE-SHIELD-REJECTED)."
+        ]
+      }
+    },
+    {
+      "id": "FB-CAPTURE-SOURCE-PROVENANCE",
+      "impact": "El glosario trata captureSource como metadato de captura opcional sin declarar su procedencia real: SmartVisionAnalysisResource no lo expone actualmente y su presencia en la carga util depende de que desktop-bff lo mapee. Sin esa nota, un implementador puede asumir que el recurso publicado lo garantiza y erosionar la degradacion ya especificada para el chip 'Origen'.",
+      "recommendation": "Anotar en el glosario de captureSource que SmartVisionAnalysisResource no lo expone actualmente, que su presencia depende de que desktop-bff lo mapee y que si llega ausente el chip 'Origen' se omite sin degradar el resto de la seccion dimensional. No cambiar alcance ni criterios de comportamiento.",
+      "severity": "minor",
+      "targets": [
+        "requirements",
+        "design"
+      ],
+      "title": "captureSource: procedencia en desktop-bff y omision sin degradacion",
+      "updates": {
+        "design": [
+          "Documentar en la capa de mapeo que captureSource es un campo opcional dependiente de desktop-bff y que su ausencia no altera la seccion dimensional."
+        ],
+        "requirements": [
+          "Glosario de captureSource: anotar que SmartVisionAnalysisResource no lo expone actualmente, que su presencia depende de que desktop-bff lo mapee y que si llega ausente el chip 'Origen' se omite sin degradar, sin cambiar alcance ni AC de comportamiento (FB-CAPTURE-SOURCE-PROVENANCE)."
+        ]
+      }
+    }
+  ],
+  "spec": "dimensional-evidence-validation-web"
+}
