@@ -375,3 +375,7 @@ Con `verbatimModuleSyntax` habilitado, los simbolos que solo existen en tiempo d
 ```ts
 import type { RootState } from '@/store';
 ```
+
+## Specs activas
+
+- `dimensional-evidence-validation-web`: spec frontend web recorte solo-frontend de validacion dimensional de evidencia (ver `.kiro/specs/dimensional-evidence-validation-web/spec.json`). Fase: `initialized`.
