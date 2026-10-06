@@ -9,7 +9,6 @@ import {
 import { BrainCircuit, Eye, RefreshCw, TriangleAlert } from 'lucide-react';
 import { ApiErrorState } from '@/components/shared';
 import {
-  DegradedSectionsBanner,
   EmptyState,
 } from '@/components/common';
 import { Button, Card, Select, Skeleton } from '@/components/ui';
@@ -81,7 +80,6 @@ export function SmartVisionPage() {
     () => alertsQuery.data?.alerts ?? [],
     [alertsQuery.data],
   );
-  const degradedSections = alertsQuery.data?.degradedSections ?? [];
 
   // Permite abrir el detalle desde navegacion contextual (?alertId=...).
   useEffect(() => {
@@ -270,8 +268,6 @@ export function SmartVisionPage() {
           </Button>
         </div>
       </div>
-
-      <DegradedSectionsBanner sections={degradedSections} />
 
       {isInitialLoading ? (
         <SmartVisionSkeleton />

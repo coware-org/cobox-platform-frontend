@@ -7,23 +7,21 @@ type RouteCardProps = {
   route: Route;
   driverLabel: string;
   vehicleLabel: string;
-  onAssignDriver: (route: Route) => void;
-  onAssignVehicle: (route: Route) => void;
-  onAddOrder: (route: Route) => void;
-  onAddDeliveredOrder: (route: Route) => void;
+  onAssign: (route: Route) => void;
   onStartRoute: (routeId: string) => void;
   onViewDetails: (routeId: string) => void;
   isStarting?: boolean;
 };
 
+/**
+ * La tarjeta expone solo dos acciones. Ordenes, vehiculo y conductor se
+ * configuran juntos desde el dialogo de asignacion.
+ */
 export function RouteCard({
   route,
   driverLabel,
   vehicleLabel,
-  onAssignDriver,
-  onAssignVehicle,
-  onAddOrder,
-  onAddDeliveredOrder,
+  onAssign,
   onStartRoute,
   onViewDetails,
   isStarting = false,
@@ -40,7 +38,14 @@ export function RouteCard({
               <RouteIcon className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate font-bold text-slate-900">{route.title}</h2>
+              <button
+                type="button"
+                onClick={() => onViewDetails(route.id)}
+                className="block max-w-full text-left hover:underline"
+                aria-label={`Ver detalle de la ruta ${route.title}`}
+              >
+                <h2 className="truncate font-bold text-slate-900">{route.title}</h2>
+              </button>
               <p className="mt-1 text-xs text-[#64748B]">
                 {finishedOrderIds.length}/{orderIds.length} ordenes finalizadas
               </p>
@@ -74,36 +79,23 @@ export function RouteCard({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-2 border-t border-[#E2E8F0] pt-3">
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" className="h-9 text-xs" onClick={() => onAssignVehicle(route)}>
-            Vehiculo
-          </Button>
-          <Button variant="secondary" className="h-9 text-xs" onClick={() => onAssignDriver(route)}>
-            Conductor
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" className="h-9 text-xs" onClick={() => onAddOrder(route)}>
-            Agregar orden
-          </Button>
-          <Button variant="secondary" className="h-9 text-xs" onClick={() => onAddDeliveredOrder(route)}>
-            Entregada
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            className="h-9 text-xs"
-            disabled={route.status !== 'PLANNED' || isStarting}
-            onClick={() => onStartRoute(route.id)}
-          >
-            <Play className="h-3.5 w-3.5" aria-hidden="true" />
-            Iniciar
-          </Button>
-          <Button variant="ghost" className="h-9 text-xs" onClick={() => onViewDetails(route.id)}>
-            Ver detalle
-          </Button>
-        </div>
+      <div className="mt-5 grid grid-cols-2 gap-2 border-t border-[#E2E8F0] pt-3">
+        <Button
+          className="h-9 text-xs"
+          disabled={route.status === 'COMPLETED'}
+          onClick={() => onAssign(route)}
+        >
+          Asignar
+        </Button>
+        <Button
+          variant="secondary"
+          className="h-9 text-xs"
+          disabled={route.status !== 'PLANNED' || isStarting}
+          onClick={() => onStartRoute(route.id)}
+        >
+          <Play className="h-3.5 w-3.5" aria-hidden="true" />
+          Iniciar
+        </Button>
       </div>
     </Card>
   );

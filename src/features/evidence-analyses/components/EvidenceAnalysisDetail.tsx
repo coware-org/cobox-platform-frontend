@@ -3,7 +3,6 @@ import { Button, Skeleton } from '@/components/ui';
 import type { EvidenceAnalysisDetailView } from '../types';
 import { EvidenceAnalysisStatusBadge } from './EvidenceAnalysisStatusBadge';
 import { EvidencePhoto } from './EvidencePhoto';
-import { DegradedSectionsBanner } from '@/components/common';
 
 type EvidenceAnalysisDetailProps = {
   analysis?: EvidenceAnalysisDetailView | null;
@@ -205,7 +204,6 @@ export function EvidenceAnalysisDetail(props: EvidenceAnalysisDetailProps) {
   return (
     <div className="space-y-5">
       {evidenceId ? <EvidencePhoto key={evidenceId} evidenceId={evidenceId} /> : null}
-      <DegradedSectionsBanner sections={props.analysis?.degradedSections} />
       {props.error && props.analysis ? <p role="alert" className="text-sm text-red-800">No se pudo actualizar el análisis. Se muestran los últimos datos disponibles.</p> : null}
       <EvidenceAnalysisResult {...props} error={props.analysis ? null : props.error} />
       {props.onRetry && props.analysis && !props.isLoading ? (

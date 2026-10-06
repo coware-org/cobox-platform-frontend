@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react';
 
-export type ToastType = 'success' | 'error';
+export type ToastType = 'success' | 'error' | 'warning';
 
 export type Toast = {
   id: number;
   title: string;
   type: ToastType;
+  details?: string[];
 };
 
 export type ToastContextValue = {

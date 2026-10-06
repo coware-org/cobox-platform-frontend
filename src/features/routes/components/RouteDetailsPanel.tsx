@@ -10,8 +10,10 @@ type RouteDetailsPanelProps = {
   driverLabel: string;
   vehicleLabel: string;
   isStarting: boolean;
+  isMarkingDelivered?: boolean;
   onClose: () => void;
   onStartRoute: (routeId: string) => void;
+  onMarkOrderDelivered: (routeId: string, orderId: string) => void;
 };
 
 function PanelSkeleton() {
@@ -23,7 +25,16 @@ function PanelSkeleton() {
   );
 }
 
-export function RouteDetailsPanel({ routeId, driverLabel, vehicleLabel, isStarting, onClose, onStartRoute }: RouteDetailsPanelProps) {
+export function RouteDetailsPanel({
+  routeId,
+  driverLabel,
+  vehicleLabel,
+  isStarting,
+  isMarkingDelivered = false,
+  onClose,
+  onStartRoute,
+  onMarkOrderDelivered,
+}: RouteDetailsPanelProps) {
   const routeQuery = useRoute(routeId);
   const route = routeQuery.data;
   const isNotFound = isAxiosError(routeQuery.error) && routeQuery.error.response?.status === 404;
@@ -101,14 +112,28 @@ export function RouteDetailsPanel({ routeId, driverLabel, vehicleLabel, isStarti
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {orderIds.map((orderId) => (
-                      <div key={orderId} className="flex items-center justify-between py-2 text-sm">
-                        <span className="font-medium text-slate-950">Orden #{orderId}</span>
-                        <span className="text-slate-500">
-                          {finishedOrderIds.includes(orderId) ? 'Entregada' : 'Pendiente'}
-                        </span>
-                      </div>
-                    ))}
+                    {orderIds.map((orderId) => {
+                      const isFinished = finishedOrderIds.includes(orderId);
+
+                      return (
+                        <div key={orderId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                          <span className="font-medium text-slate-950">Orden #{orderId}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">{isFinished ? 'Entregada' : 'Pendiente'}</span>
+                            {isFinished ? null : (
+                              <Button
+                                variant="secondary"
+                                className="h-8 px-2 text-xs"
+                                disabled={isMarkingDelivered}
+                                onClick={() => onMarkOrderDelivered(route.id, orderId)}
+                              >
+                                Marcar entregada
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </Card>

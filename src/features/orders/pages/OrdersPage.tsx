@@ -20,8 +20,11 @@ import {
 } from 'lucide-react';
 import { Badge, Button, Card, Input, Skeleton, useToast } from '@/components/ui';
 import { ApiErrorState } from '@/components/shared';
-import { useAddOrderToRoute, useRoutes } from '@/features/routes/hooks';
-import { validatePositiveId } from '@/features/routes/validations';
+import { RouteAssignmentDialog } from '@/features/routes/components';
+import { useAssignRoutePlan, useRoutes } from '@/features/routes/hooks';
+import type { RouteAssignmentSelection } from '@/features/routes/services';
+import { useDrivers } from '@/features/drivers/hooks';
+import { useVehicles } from '@/features/vehicles/hooks';
 import {
   useOrders,
   useCreateOrder,
@@ -31,7 +34,6 @@ import {
 } from '../hooks';
 import type { Order, OrderAssignment, OrderStatus } from '../types';
 import {
-  AssignRouteToOrderDialog,
   OrderTraceability,
   OrderFormDialog,
   CompleteOrderDialog,
@@ -70,15 +72,19 @@ export function OrdersPage() {
   const { toast } = useToast();
   const ordersQuery = useOrders();
   const routesQuery = useRoutes();
+  const driversQuery = useDrivers();
+  const vehiclesQuery = useVehicles();
 
   const createOrderMutation = useCreateOrder();
   const markReadyMutation = useMarkOrderReady();
   const markInTransitMutation = useMarkOrderInTransit();
   const markCompletedMutation = useMarkOrderCompleted();
-  const addOrderToRouteMutation = useAddOrderToRoute();
+  const assignment = useAssignRoutePlan();
 
   const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
   const routes = useMemo(() => routesQuery.data ?? [], [routesQuery.data]);
+  const drivers = useMemo(() => driversQuery.data ?? [], [driversQuery.data]);
+  const vehicles = useMemo(() => vehiclesQuery.data ?? [], [vehiclesQuery.data]);
 
   // El detalle se deriva de la lista viva para que lista y detalle muestren
   // siempre el mismo conductor/vehículo sin recargar la página.
@@ -175,32 +181,28 @@ export function OrdersPage() {
     setIsAssignRouteOpen(true);
   };
 
-  const handleAssignRoute = () => {
-    if (!selectedOrder || !selectedRouteId) return;
+  // El dialogo entrega la seleccion completa; aqui solo se resuelve la ruta
+  // elegida y se delega la ejecucion al mismo plan usado desde Gestion de rutas.
+  const handleAssignRoute = (selection: RouteAssignmentSelection) => {
+    if (!selectedOrder) return;
 
-    const validationError = validatePositiveId(selectedRouteId, 'La ruta');
-    if (validationError) {
-      toast({ title: validationError, type: 'error' });
+    const targetRoute = routes.find((route) => route.id === selectedRouteId);
+    if (!targetRoute) {
+      toast({ title: 'Selecciona una ruta valida', type: 'error' });
       return;
     }
 
-    addOrderToRouteMutation.mutate(
-      { routeId: selectedRouteId, payload: { orderId: selectedOrder.id } },
-      {
-        onSuccess: () => {
-          setIsAssignRouteOpen(false);
-          setSelectedRouteId('');
-          toast({ title: 'Ruta asignada a la orden', type: 'success' });
-        },
-        onError: (err) => {
-          const msg = isAxiosError(err)
-            ? (err.response?.data as { message?: string })?.message ?? 'No se pudo asignar la ruta'
-            : 'Error en la petición';
-          toast({ title: msg, type: 'error' });
-        },
-      },
-    );
+    void assignment.submit({ route: targetRoute, selection, orders, title: targetRoute.title }).then((result) => {
+      if (result.outcome === 'SUCCEEDED') {
+        setIsAssignRouteOpen(false);
+        setSelectedRouteId('');
+      }
+    });
   };
+
+  const assignmentWarnings = selectedRouteId ? (assignment.warningsByRoute[selectedRouteId] ?? []) : [];
+  const assignmentFailure =
+    selectedRouteId && assignment.lastFailure?.routeId === selectedRouteId ? assignment.lastFailure : null;
 
   const columns = useMemo(
     () => [
@@ -489,14 +491,25 @@ export function OrdersPage() {
       )}
 
       {selectedOrder && (
-        <AssignRouteToOrderDialog
+        <RouteAssignmentDialog
           open={isAssignRouteOpen}
-          orderId={selectedOrder.id}
+          route={null}
           routes={routes}
-          isSubmitting={addOrderToRouteMutation.isPending}
-          isLoading={routesQuery.isLoading}
-          selectedRouteId={selectedRouteId}
+          lockedOrderId={selectedOrder.id}
+          vehicles={vehicles}
+          drivers={drivers}
+          orders={orders}
+          isSubmitting={assignment.isPending}
+          isLoading={routesQuery.isLoading || vehiclesQuery.isLoading || driversQuery.isLoading}
+          warnings={assignmentWarnings}
+          failure={assignmentFailure}
+          appliedOrderIds={assignment.appliedOrderIds}
           onSelectedRouteChange={setSelectedRouteId}
+          onSelectedVehicleChange={() => undefined}
+          onSelectedDriverChange={() => undefined}
+          onDismissWarnings={() => {
+            if (selectedRouteId) assignment.dismissWarnings(selectedRouteId);
+          }}
           onClose={() => setIsAssignRouteOpen(false)}
           onSubmit={handleAssignRoute}
         />
