@@ -16,8 +16,9 @@ import {
   Skeleton,
   useToast,
 } from '@/components/ui';
-import { ApiErrorState } from '@/components/shared';
+import { ApiErrorState, TablePagination } from '@/components/shared';
 import { EmptyState, PageHeader } from '@/components/common';
+import { usePagination } from '@/hooks';
 import {
   useAssignResponsible,
   useCreateIncident,
@@ -90,6 +91,8 @@ export function IncidentsPage() {
       return matchesSearch && matchesSeverity && matchesStatus;
     });
   }, [incidents, search, severityFilter, statusFilter]);
+
+  const pagination = usePagination({ items: filteredIncidents });
 
   const activeIncident = useMemo(() => {
     if (!selectedIncident) return null;
@@ -255,9 +258,12 @@ export function IncidentsPage() {
   ];
 
   const table = useReactTable({
-    data: filteredIncidents,
+    data: pagination.pageItems,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    // La página la controla usePagination: con `data` inestable TanStack entra
+    // en un bucle infinito de auto-reset de paginación.
+    manualPagination: true,
   });
 
   if (incidentsQuery.isError) {
@@ -449,6 +455,15 @@ export function IncidentsPage() {
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              pageIndex={pagination.pageIndex}
+              pageSize={pagination.pageSize}
+              pageCount={pagination.pageCount}
+              totalItems={pagination.totalItems}
+              pageSizeOptions={pagination.pageSizeOptions}
+              onPageChange={pagination.setPageIndex}
+              onPageSizeChange={pagination.setPageSize}
+            />
           </Card>
         )}
       </div>

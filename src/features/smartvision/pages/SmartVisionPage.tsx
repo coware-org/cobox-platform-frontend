@@ -7,11 +7,12 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { BrainCircuit, Eye, RefreshCw, TriangleAlert } from 'lucide-react';
-import { ApiErrorState } from '@/components/shared';
+import { ApiErrorState, TablePagination } from '@/components/shared';
 import {
   EmptyState,
 } from '@/components/common';
 import { Button, Card, Select, Skeleton } from '@/components/ui';
+import { usePagination } from '@/hooks';
 import { cn } from '@/utils';
 import {
   AlertDetailDrawer,
@@ -80,6 +81,8 @@ export function SmartVisionPage() {
     () => alertsQuery.data?.alerts ?? [],
     [alertsQuery.data],
   );
+
+  const pagination = usePagination({ items: alerts });
 
   // Permite abrir el detalle desde navegacion contextual (?alertId=...).
   useEffect(() => {
@@ -194,9 +197,12 @@ export function SmartVisionPage() {
   );
 
   const table = useReactTable({
-    data: alerts,
+    data: pagination.pageItems,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    // La página la controla usePagination: con `data` inestable TanStack entra
+    // en un bucle infinito de auto-reset de paginación.
+    manualPagination: true,
   });
 
   const isInitialLoading =
@@ -362,6 +368,15 @@ export function SmartVisionPage() {
                       </tbody>
                     </table>
                   </div>
+                  <TablePagination
+                    pageIndex={pagination.pageIndex}
+                    pageSize={pagination.pageSize}
+                    pageCount={pagination.pageCount}
+                    totalItems={pagination.totalItems}
+                    pageSizeOptions={pagination.pageSizeOptions}
+                    onPageChange={pagination.setPageIndex}
+                    onPageSizeChange={pagination.setPageSize}
+                  />
                 </Card>
               )}
             </div>

@@ -189,9 +189,7 @@ export function RoutesPage() {
               route={route}
               driverLabel={driverLabel(route)}
               vehicleLabel={vehicleLabel(route)}
-              isStarting={markInProgress.isPending}
               onAssign={setAssignmentRoute}
-              onStartRoute={handleStartRoute}
               onViewDetails={setDetailsRouteId}
             />
           ))

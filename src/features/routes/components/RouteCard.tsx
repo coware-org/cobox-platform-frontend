@@ -1,4 +1,4 @@
-import { ClipboardList, Play, RouteIcon, Truck, UserRound } from 'lucide-react';
+import { ClipboardList, RouteIcon, Truck, UserRound } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import type { Route } from '../types';
 import { RouteStatusBadge } from './RouteStatusBadge';
@@ -8,13 +8,11 @@ type RouteCardProps = {
   driverLabel: string;
   vehicleLabel: string;
   onAssign: (route: Route) => void;
-  onStartRoute: (routeId: string) => void;
   onViewDetails: (routeId: string) => void;
-  isStarting?: boolean;
 };
 
 /**
- * La tarjeta expone solo dos acciones. Ordenes, vehiculo y conductor se
+ * La tarjeta expone una sola accion. Ordenes, vehiculo y conductor se
  * configuran juntos desde el dialogo de asignacion.
  */
 export function RouteCard({
@@ -22,9 +20,7 @@ export function RouteCard({
   driverLabel,
   vehicleLabel,
   onAssign,
-  onStartRoute,
   onViewDetails,
-  isStarting = false,
 }: RouteCardProps) {
   const orderIds = route.orderIds ?? [];
   const finishedOrderIds = route.finishedOrderIds ?? [];
@@ -79,22 +75,13 @@ export function RouteCard({
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-2 border-t border-[#E2E8F0] pt-3">
+      <div className="mt-5 border-t border-[#E2E8F0] pt-3">
         <Button
-          className="h-9 text-xs"
+          className="h-9 w-full text-xs"
           disabled={route.status === 'COMPLETED'}
           onClick={() => onAssign(route)}
         >
           Asignar
-        </Button>
-        <Button
-          variant="secondary"
-          className="h-9 text-xs"
-          disabled={route.status !== 'PLANNED' || isStarting}
-          onClick={() => onStartRoute(route.id)}
-        >
-          <Play className="h-3.5 w-3.5" aria-hidden="true" />
-          Iniciar
         </Button>
       </div>
     </Card>

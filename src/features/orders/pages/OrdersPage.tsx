@@ -19,7 +19,8 @@ import {
   RouteIcon,
 } from 'lucide-react';
 import { Badge, Button, Card, Input, Skeleton, useToast } from '@/components/ui';
-import { ApiErrorState } from '@/components/shared';
+import { ApiErrorState, TablePagination } from '@/components/shared';
+import { usePagination } from '@/hooks';
 import { RouteAssignmentDialog } from '@/features/routes/components';
 import { useAssignRoutePlan, useRoutes } from '@/features/routes/hooks';
 import type { RouteAssignmentSelection } from '@/features/routes/services';
@@ -104,6 +105,8 @@ export function OrdersPage() {
       return matchesSearch && matchesStatus;
     });
   }, [orders, search, statusFilter]);
+
+  const pagination = usePagination({ items: filteredOrders });
 
   const metrics = useMemo(() => {
     return {
@@ -256,9 +259,12 @@ export function OrdersPage() {
   );
 
   const table = useReactTable({
-    data: filteredOrders,
+    data: pagination.pageItems,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    // La página la controla usePagination: con `data` inestable TanStack entra
+    // en un bucle infinito de auto-reset de paginación.
+    manualPagination: true,
   });
 
   return (
@@ -324,32 +330,43 @@ export function OrdersPage() {
               No se encontraron servicios en el período seleccionado.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <th key={header.id} className="border-b border-[#E2E8F0] px-6 py-4">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody>
-                  {table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="border-b border-[#E2E8F0] last:border-b-0 hover:bg-slate-50 transition-colors">
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="px-6 py-4">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <tr key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <th key={header.id} className="border-b border-[#E2E8F0] px-6 py-4">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </th>
+                        ))}
+                      </tr>
+                    ))}
+                  </thead>
+                  <tbody>
+                    {table.getRowModel().rows.map((row) => (
+                      <tr key={row.id} className="border-b border-[#E2E8F0] last:border-b-0 hover:bg-slate-50 transition-colors">
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-6 py-4">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <TablePagination
+                pageIndex={pagination.pageIndex}
+                pageSize={pagination.pageSize}
+                pageCount={pagination.pageCount}
+                totalItems={pagination.totalItems}
+                pageSizeOptions={pagination.pageSizeOptions}
+                onPageChange={pagination.setPageIndex}
+                onPageSizeChange={pagination.setPageSize}
+              />
+            </>
           )}
         </Card>
 

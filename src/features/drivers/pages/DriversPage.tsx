@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
-import { ApiErrorState } from '@/components/shared';
+import { ApiErrorState, TablePagination } from '@/components/shared';
 import { Button, Card, Input, Skeleton, useToast } from '@/components/ui';
+import { usePagination } from '@/hooks';
 import { DriverCard, DriverDetailsPanel } from '../components';
 import { useCreateDriver, useDrivers } from '../hooks';
 import type { CreateDriverPayload } from '../types';
@@ -29,6 +30,12 @@ export function DriversPage() {
         driver.licenceNumber.toLowerCase().includes(normalizedSearch),
     );
   }, [drivers, search]);
+
+  const pagination = usePagination({
+    items: filteredDrivers,
+    initialPageSize: 12,
+    pageSizeOptions: [12, 24, 48],
+  });
 
   const handleCreate = () => {
     const payload = { email: form.email.trim(), licenceNumber: form.licenceNumber.trim() };
@@ -93,18 +100,29 @@ export function DriversPage() {
         {formError ? <p className="text-sm font-medium text-[#EF4444] xl:col-span-2">{formError}</p> : null}
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {driversQuery.isError ? (
-          <div className="lg:col-span-3">
-            <ApiErrorState onRetry={() => void driversQuery.refetch()} />
-          </div>
-        ) : driversQuery.isLoading ? (
-          Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-52" />)
-        ) : (
-          filteredDrivers.map((driver) => (
-            <DriverCard key={driver.id} driver={driver} onSelect={setSelectedDriverId} />
-          ))
-        )}
+      <div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {driversQuery.isError ? (
+            <div className="lg:col-span-3">
+              <ApiErrorState onRetry={() => void driversQuery.refetch()} />
+            </div>
+          ) : driversQuery.isLoading ? (
+            Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-52" />)
+          ) : (
+            pagination.pageItems.map((driver) => (
+              <DriverCard key={driver.id} driver={driver} onSelect={setSelectedDriverId} />
+            ))
+          )}
+        </div>
+        <TablePagination
+          pageIndex={pagination.pageIndex}
+          pageSize={pagination.pageSize}
+          pageCount={pagination.pageCount}
+          totalItems={pagination.totalItems}
+          pageSizeOptions={pagination.pageSizeOptions}
+          onPageChange={pagination.setPageIndex}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
 
       {!driversQuery.isLoading && !driversQuery.isError && filteredDrivers.length === 0 ? (

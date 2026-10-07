@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, ClipboardList, Eye, Plus, Search, Settings2, Wrench, X } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { ApiErrorState } from '@/components/shared';
+import { ApiErrorState, TablePagination } from '@/components/shared';
 import { Badge, Button, Card, Dialog, Input, Select, Skeleton, useToast } from '@/components/ui';
+import { usePagination } from '@/hooks';
 import {
   useActivateMaintenanceSchedule,
   useCancelMaintenanceOrder,
@@ -193,6 +194,8 @@ export function MaintenancePage() {
     });
   }, [orders, priorityFilter, search, statusFilter, typeFilter]);
 
+  const pagination = usePagination({ items: filteredOrders });
+
   const metrics = useMemo(() => ({
     total: orders.length,
     open: orders.filter((order) => order.status === 'OPEN').length,
@@ -306,7 +309,7 @@ export function MaintenancePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOrders.map((order) => (
+                    {pagination.pageItems.map((order) => (
                       <tr key={order.id} className="border-b border-[#E2E8F0] last:border-b-0">
                         <td className="px-6 py-4 font-semibold text-slate-950">#{order.id}</td>
                         <td className="px-6 py-4">Vehiculo #{order.vehicleId}</td>
@@ -329,6 +332,15 @@ export function MaintenancePage() {
                 </table>
               </div>
             )}
+            <TablePagination
+              pageIndex={pagination.pageIndex}
+              pageSize={pagination.pageSize}
+              pageCount={pagination.pageCount}
+              totalItems={pagination.totalItems}
+              pageSizeOptions={pagination.pageSizeOptions}
+              onPageChange={pagination.setPageIndex}
+              onPageSizeChange={pagination.setPageSize}
+            />
           </Card>
         </>
       ) : (
